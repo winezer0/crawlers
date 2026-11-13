@@ -4,3 +4,5 @@ use (
 	./basecrawler
 	./browcrawler
 )
+
+replace github.com/winezer0/basecrawler v0.0.0 => ./basecrawler

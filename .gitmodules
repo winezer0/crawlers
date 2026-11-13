@@ -1,0 +1,6 @@
+[submodule "basecrawler"]
+	path = basecrawler
+	url = https://github.com/winezer0/basecrawler.git
+[submodule "browcrawler"]
+	path = browcrawler
+	url = https://github.com/winezer0/browcrawler.git

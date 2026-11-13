@@ -24,10 +24,6 @@ profile.cov
 # Go workspace checksum
 go.work.sum
 
-# Independently cloned repositories
-/basecrawler/
-/browcrawler/
-
 # env file
 .env
 

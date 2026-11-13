@@ -21,9 +21,12 @@ profile.cov
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
-# Go workspace file
-go.work
+# Go workspace checksum
 go.work.sum
+
+# Independently cloned repositories
+/basecrawler/
+/browcrawler/
 
 # env file
 .env
@@ -31,3 +34,4 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+/.idea

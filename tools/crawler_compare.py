@@ -608,8 +608,9 @@ def make_parser() -> argparse.ArgumentParser:
     recover = sub.add_parser("recover", help="从已保存的运行目录重建报告")
     recover.add_argument("--output-dir", type=Path, required=True)
     recover.add_argument("--targets", default="all", help="可选 site_id 列表；默认恢复整个运行目录")
-    verify = sub.add_parser("verify", help="复核各工具独有的站内 URL 当前状态")
+    verify = sub.add_parser("verify", help="抽样复核站内 URL 候选的当前状态")
     verify.add_argument("--run-dir", type=Path, required=True)
+    verify.add_argument("--tool", choices=sorted(TOOLS), help="抽样验证指定工具的全部站内候选 URL，包括共有 URL")
     verify.add_argument("--limit-per-host", type=int, default=20)
     verify.add_argument("--timeout", type=int, default=10)
     verify.add_argument("--pause", type=float, default=1.0)
@@ -898,7 +899,33 @@ def recover_report(output_dir: Path, site_ids: set[str] | None = None) -> int:
     return 0
 
 
-def verify_unique_urls(run_dir: Path, *, limit_per_host: int, timeout: int, pause: float) -> int:
+def select_verification_candidates(
+    grouped: dict[tuple[str, str, int], dict[str, set[str]]],
+    source_tool: str | None = None,
+) -> dict[tuple[str, str], dict[str, set[int]]]:
+    candidates: dict[tuple[str, str], dict[str, set[int]]] = {}
+    for (site_id, _mode, round_number), tools_for_site in grouped.items():
+        if source_tool:
+            for url in tools_for_site.get(source_tool, set()):
+                candidates.setdefault((site_id, url), {}).setdefault(source_tool, set()).add(round_number)
+            continue
+        if len(tools_for_site) < 2:
+            continue
+        for tool_name, urls in tools_for_site.items():
+            peers = set().union(*(other for peer, other in tools_for_site.items() if peer != tool_name))
+            for url in urls - peers:
+                candidates.setdefault((site_id, url), {}).setdefault(tool_name, set()).add(round_number)
+    return candidates
+
+
+def verify_unique_urls(
+    run_dir: Path,
+    *,
+    limit_per_host: int,
+    timeout: int,
+    pause: float,
+    source_tool: str | None = None,
+) -> int:
     results_path, urls_path = run_dir / "results.csv", run_dir / "urls.csv"
     if not results_path.is_file() or not urls_path.is_file():
         raise ValueError("run directory must contain results.csv and urls.csv")
@@ -922,14 +949,7 @@ def verify_unique_urls(run_dir: Path, *, limit_per_host: int, timeout: int, paus
             if row["in_scope"].lower() == "true" and run_key in valid_runs:
                 key = (row["site_id"], row["mode"], int(row["round"]))
                 grouped.setdefault(key, {}).setdefault(row["tool"], set()).add(row["normalized_url"])
-    candidates: dict[tuple[str, str], dict[str, set[int]]] = {}
-    for (site_id, _mode, round_number), tools_for_site in grouped.items():
-        if len(tools_for_site) < 2:
-            continue
-        for tool_name, urls in tools_for_site.items():
-            peers = set().union(*(other for peer, other in tools_for_site.items() if peer != tool_name)) if len(tools_for_site) > 1 else set()
-            for url in urls - peers:
-                candidates.setdefault((site_id, url), {}).setdefault(tool_name, set()).add(round_number)
+    candidates = select_verification_candidates(grouped, source_tool)
     curl = shutil.which("curl.exe") or shutil.which("curl")
     if not curl:
         raise ValueError("curl.exe is required for online URL verification")
@@ -1010,14 +1030,21 @@ def verify_unique_urls(run_dir: Path, *, limit_per_host: int, timeout: int, paus
     counts: dict[str, int] = {}
     for row in rows:
         counts[row["classification"]] = counts.get(row["classification"], 0) + 1
+    verification_mode = (
+        f"Checks a deterministic SHA-256 sample of all in-scope candidates from `{source_tool}`, including URLs shared with other tools."
+        if source_tool else
+        "Checks a deterministic SHA-256 sample of in-scope URLs found by one tool but not its peers."
+    )
     summary = [
-        "# Unique URL verification", "",
-        "Checks a deterministic SHA-256 sample of in-scope URLs found by one tool but not its peers. Uses HEAD with redirect following and a one-byte ranged GET fallback when HEAD is unsupported.", "",
+        "# Candidate URL verification" if source_tool else "# Unique URL verification", "",
+        verification_mode + " Uses HEAD with redirect following and a one-byte ranged GET fallback when HEAD is unsupported.", "",
         f"Run directory: `{run_dir}`", "", "| Classification | Count |", "|---|---:|",
     ]
     summary.extend(f"| {name} | {count} |" for name, count in sorted(counts.items()))
     (run_dir / "verification.md").write_text("\n".join(summary) + "\n", encoding="utf-8")
-    print(f"verified {sum(checked_by_host.values())}/{len(rows)} unique URLs")
+    checked_count = sum(row["classification"] != "limit_not_checked" for row in rows)
+    candidate_label = "candidate URLs" if source_tool else "peer-unique URLs"
+    print(f"checked {checked_count}/{len(candidates)} {candidate_label}")
     print(f"verification report: {run_dir / 'verification.md'}")
     return 0
 
@@ -1042,6 +1069,18 @@ def self_test() -> int:
     structured = extract_urls('{"url":"https://example.com/good","body":"https://example.com/false-positive"}')
     assert structured == {"https://example.com/good"}
     assert normalize_url("https://example.com/chunk.js:12:99") == "https://example.com/chunk.js"
+    sample_group = {("x", "static", 1): {
+        "basecrawler": {"https://example.com/shared", "https://example.com/base-only"},
+        "katana": {"https://example.com/shared", "https://example.com/peer-only"},
+    }}
+    all_base_candidates = select_verification_candidates(sample_group, "basecrawler")
+    assert set(all_base_candidates) == {
+        ("x", "https://example.com/shared"), ("x", "https://example.com/base-only"),
+    }
+    peer_unique_candidates = select_verification_candidates(sample_group)
+    assert set(peer_unique_candidates) == {
+        ("x", "https://example.com/base-only"), ("x", "https://example.com/peer-only"),
+    }
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
         command, _, error = build_command("basecrawler", custom, temp_path)
@@ -1083,7 +1122,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             return verify_unique_urls(
                 args.run_dir.resolve(), limit_per_host=args.limit_per_host,
-                timeout=args.timeout, pause=args.pause,
+                timeout=args.timeout, pause=args.pause, source_tool=args.tool,
             )
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             parser.error(str(exc))

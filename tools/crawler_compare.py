@@ -371,7 +371,7 @@ def build_command(
         command = exe_prefix + [
             "-u", target.seed, "-d", str(target.depth), "-c", str(target.concurrency),
             "--timeout", str(target.timeout), "--max-urls", str(target.max_pages),
-            "--scope", "fqdn", "--rl", str(target.host_rate),
+            "--scope", "fqdn", "--rl", str(max(1, int(target.host_rate))),
             "--phc", str(max(1, min(target.concurrency, 4))),
             "--no-fuzz", "--no-testfill", "--no-unsafe-send",
             "--report", str(report),
@@ -1033,6 +1033,7 @@ def self_test() -> int:
     assert not in_scope("https://example.com.evil.test/path", target)
     custom = target_from_json({
         "site_id": "custom", "seed": "https://example.com/", "allowed_hosts": "example.com",
+        "host_rate": 1.0,
     })
     assert custom.allowed_hosts == ("example.com",)
     urls = extract_urls('\x1b[32mURL: https://example.com/a?q=1#x\x1b[0m\n{"url":"http://other.test/b"}')
@@ -1043,8 +1044,10 @@ def self_test() -> int:
     assert normalize_url("https://example.com/chunk.js:12:99") == "https://example.com/chunk.js"
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
-        command, _, error = build_command("basecrawler", target, temp_path)
+        command, _, error = build_command("basecrawler", custom, temp_path)
         assert error is None and command is not None
+        rate_index = command.index("--rl")
+        assert command[rate_index + 1] == "1"
         report_index = command.index("--report")
         assert command[report_index + 1] == str(temp_path / "scan-report.json")
         discovery_index = command.index("--discoveries")

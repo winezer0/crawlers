@@ -367,6 +367,7 @@ def build_command(
 
     if name == "basecrawler":
         report = run_dir / "scan-report.json"
+        discoveries = run_dir / "discoveries.jsonl"
         command = exe_prefix + [
             "-u", target.seed, "-d", str(target.depth), "-c", str(target.concurrency),
             "--timeout", str(target.timeout), "--max-urls", str(target.max_pages),
@@ -374,6 +375,7 @@ def build_command(
             "--phc", str(max(1, min(target.concurrency, 4))),
             "--no-fuzz", "--no-testfill", "--no-unsafe-send",
             "--report", str(report),
+            "--discoveries", str(discoveries),
             "-O", "json", "-o", str(output),
         ]
     elif name == "katana":
@@ -467,6 +469,21 @@ def collect_output_urls(run_dir: Path, stdout: str, stderr: str) -> set[str]:
     return set().union(*(extract_urls(text) for text in texts))
 
 
+def collect_result_and_discovery_counts(run_dir: Path, stdout: str, stderr: str) -> tuple[int, int]:
+    result_texts = [stdout, stderr]
+    result_path = run_dir / "tool-output.jsonl"
+    if result_path.is_file():
+        result_texts.append(result_path.read_text(encoding="utf-8", errors="replace"))
+    result_urls = set().union(*(extract_urls(text) for text in result_texts))
+
+    discovery_urls: set[str] = set()
+    for name in ("discoveries.jsonl", "discovered.jsonl"):
+        path = run_dir / name
+        if path.is_file():
+            discovery_urls.update(extract_urls(path.read_text(encoding="utf-8", errors="replace")))
+    return len(result_urls), len(discovery_urls)
+
+
 def save_csv(path: Path, rows: list[dict[str, Any]], columns: list[str]) -> None:
     with path.open("w", newline="", encoding="utf-8-sig") as handle:
         writer = csv.DictWriter(handle, fieldnames=columns, extrasaction="ignore")
@@ -497,7 +514,7 @@ def write_reports(output_dir: Path, run_rows: list[dict[str, Any]], url_rows: li
         row["unique_only"] = unique_only.get((row["site_id"], row["tool"], row["round"]))
     save_csv(output_dir / "results.csv", run_rows, [
         "site_id", "profile", "tool", "mode", "round", "version", "status", "exit_code",
-        "duration_seconds", "unique_urls", "in_scope_urls", "out_scope_urls", "unique_only",
+        "duration_seconds", "result_urls", "discovery_urls", "unique_urls", "in_scope_urls", "out_scope_urls", "unique_only",
         "command", "stdout_file", "stderr_file", "error",
     ])
     save_csv(output_dir / "urls.csv", url_rows, [
@@ -529,6 +546,7 @@ def write_reports(output_dir: Path, run_rows: list[dict[str, Any]], url_rows: li
             "recovered_exit_unknown": sum(row["status"] == "recovered" for row in rows),
             "failed_or_interrupted": sum(row["status"] in {"failed", "timeout", "interrupted"} for row in rows),
             "mean_unique_urls": mean("unique_urls"), "mean_in_scope_urls": mean("in_scope_urls"),
+            "mean_result_urls": mean("result_urls"), "mean_discovery_urls": mean("discovery_urls"),
             "mean_out_scope_urls": mean("out_scope_urls"), "mean_unique_only": mean("unique_only"),
             "round_stability_jaccard": round(sum(pairwise) / len(pairwise), 3) if pairwise else "",
             "mean_seconds": mean("duration_seconds"),
@@ -536,7 +554,7 @@ def write_reports(output_dir: Path, run_rows: list[dict[str, Any]], url_rows: li
     save_csv(output_dir / "aggregate.csv", aggregate_rows, [
         "site_id", "tool", "mode", "rounds", "known_exit_rounds", "recovered_exit_unknown",
         "failed_or_interrupted", "mean_unique_urls", "mean_in_scope_urls", "mean_out_scope_urls",
-        "mean_unique_only", "round_stability_jaccard", "mean_seconds",
+        "mean_result_urls", "mean_discovery_urls", "mean_unique_only", "round_stability_jaccard", "mean_seconds",
     ])
 
     lines = [
@@ -563,6 +581,17 @@ def write_reports(output_dir: Path, run_rows: list[dict[str, Any]], url_rows: li
         lines.append(
             f"| {row['site_id']} | {row['tool']} | {row['mode']} | {row['rounds']} "
             f"| {row['mean_in_scope_urls']} | {row['mean_unique_only']} | {stability} | {row['failed_or_interrupted']} |"
+        )
+    lines.extend([
+        "", "## Candidate and timing counts", "",
+        "Result URLs come from the tool output or standard streams. Discovery URLs come from source-edge records when the tool provides them. Unique URL totals are the deduplicated union.", "",
+        "| Site | Tool | Mean result URLs | Mean discovery URLs | Mean unique in-scope URLs | Mean runtime (s) |",
+        "|---|---|---:|---:|---:|---:|",
+    ])
+    for row in aggregate_rows:
+        lines.append(
+            f"| {row['site_id']} | {row['tool']} | {row.get('mean_result_urls', '')} "
+            f"| {row.get('mean_discovery_urls', '')} | {row['mean_in_scope_urls']} | {row['mean_seconds']} |"
         )
     lines.extend(["", "Recovered runs have an unknown exit code; `known_exit_rounds` counts only runs whose exit code was recorded."])
     lines.extend(["", "Raw outputs and command records are under `runs/<site>/<tool>/round-N/`.", ""])
@@ -692,6 +721,7 @@ def run_one(
     stdout_path.write_text(stdout, encoding="utf-8", errors="replace")
     stderr_path.write_text(stderr, encoding="utf-8", errors="replace")
     raw_urls = collect_output_urls(run_dir, stdout, stderr)
+    result_url_count, discovery_url_count = collect_result_and_discovery_counts(run_dir, stdout, stderr)
     url_rows: list[dict[str, Any]] = []
     for raw in sorted(raw_urls):
         normalized = normalize_url(raw)
@@ -711,6 +741,7 @@ def run_one(
         "site_id": target.site_id, "profile": target.profile, "tool": name,
         "mode": tool.mode, "round": round_number, "version": version,
         "status": status, "exit_code": exit_code, "duration_seconds": duration,
+        "result_urls": result_url_count, "discovery_urls": discovery_url_count,
         "unique_urls": len(unique_inside | unique_outside), "in_scope_urls": len(unique_inside),
         "out_scope_urls": len(unique_outside), "command": json.dumps(command or [], ensure_ascii=False),
         "stdout_file": str(stdout_path), "stderr_file": str(stderr_path), "error": error,
@@ -1011,10 +1042,21 @@ def self_test() -> int:
     assert structured == {"https://example.com/good"}
     assert normalize_url("https://example.com/chunk.js:12:99") == "https://example.com/chunk.js"
     with tempfile.TemporaryDirectory() as temp_dir:
-        command, _, error = build_command("basecrawler", target, Path(temp_dir))
+        temp_path = Path(temp_dir)
+        command, _, error = build_command("basecrawler", target, temp_path)
         assert error is None and command is not None
         report_index = command.index("--report")
-        assert command[report_index + 1] == str(Path(temp_dir) / "scan-report.json")
+        assert command[report_index + 1] == str(temp_path / "scan-report.json")
+        discovery_index = command.index("--discoveries")
+        assert command[discovery_index + 1] == str(temp_path / "discoveries.jsonl")
+        (temp_path / "tool-output.jsonl").write_text(
+            '{"url":"https://example.com/visited"}\n', encoding="utf-8"
+        )
+        (temp_path / "discoveries.jsonl").write_text(
+            '{"url":"https://example.com/visited"}\n{"url":"https://example.com/candidate"}\n',
+            encoding="utf-8",
+        )
+        assert collect_result_and_discovery_counts(temp_path, "", "") == (1, 2)
     print("self-test passed")
     return 0
 

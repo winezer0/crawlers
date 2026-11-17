@@ -17,6 +17,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -365,12 +366,14 @@ def build_command(
     output = run_dir / "tool-output.jsonl"
 
     if name == "basecrawler":
+        report = run_dir / "scan-report.json"
         command = exe_prefix + [
             "-u", target.seed, "-d", str(target.depth), "-c", str(target.concurrency),
             "--timeout", str(target.timeout), "--max-urls", str(target.max_pages),
             "--scope", "fqdn", "--rl", str(target.host_rate),
             "--phc", str(max(1, min(target.concurrency, 4))),
             "--no-fuzz", "--no-testfill", "--no-unsafe-send",
+            "--report", str(report),
             "-O", "json", "-o", str(output),
         ]
     elif name == "katana":
@@ -1007,6 +1010,11 @@ def self_test() -> int:
     structured = extract_urls('{"url":"https://example.com/good","body":"https://example.com/false-positive"}')
     assert structured == {"https://example.com/good"}
     assert normalize_url("https://example.com/chunk.js:12:99") == "https://example.com/chunk.js"
+    with tempfile.TemporaryDirectory() as temp_dir:
+        command, _, error = build_command("basecrawler", target, Path(temp_dir))
+        assert error is None and command is not None
+        report_index = command.index("--report")
+        assert command[report_index + 1] == str(Path(temp_dir) / "scan-report.json")
     print("self-test passed")
     return 0
 

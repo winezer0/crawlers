@@ -261,7 +261,7 @@ def verify_site(target, args):
             run['status'] = 'empty_unverified'
             write_json(site / m / 'run.json', run)
         raw_rows = jsonlines(site / m / 'results.jsonl')
-        if m != 'basecrawler':
+        if m != 'basecrawler' and raw_rows:
             run['request_errors'] = sum(bool(r.get('error')) and r.get('error') != 'max depth reached' for r in raw_rows)
             run['boundary_discoveries'] = sum(r.get('error') == 'max depth reached' for r in raw_rows)
             write_json(site / m / 'run.json', run)

@@ -45,6 +45,9 @@ class Target:
     timeout: int
     host_rate: float
     optional: bool = False
+    max_response_bytes: int = 2_097_152
+    proxy: str = ""
+    disable_bootstrap: bool = False
 
 
 def _target(
@@ -58,11 +61,14 @@ def _target(
     timeout: int = 10,
     host_rate: float = 2,
     optional: bool = False,
+    max_response_bytes: int = 2_097_152,
+    proxy: str = "",
+    disable_bootstrap: bool = False,
 ) -> Target:
     host = (urlsplit(seed).hostname or "").lower()
     return Target(
         site_id, seed, profile, (host,), depth, max_pages, concurrency,
-        timeout, host_rate, optional
+        timeout, host_rate, optional, max_response_bytes, proxy, disable_bootstrap
     )
 
 
@@ -237,6 +243,9 @@ def target_from_json(item: dict[str, Any]) -> Target:
         timeout=int(item.get("timeout", 10)),
         host_rate=float(item.get("host_rate", 1)),
         optional=bool(item.get("optional", False)),
+        max_response_bytes=int(item.get("max_response_bytes", 2_097_152)),
+        proxy=str(item.get("proxy", "")),
+        disable_bootstrap=bool(item.get("disable_bootstrap", False)),
     )
 
 
@@ -277,6 +286,20 @@ def resolve_tool_binary(name: str) -> Path | None:
         return candidate if candidate.is_file() else None
     path = TOOLS_DIR / TOOLS[name].binary
     return path if path.is_file() else None
+
+
+def browcrawler_static_budget(target: Target) -> int:
+    """Keep the integrated static pass within the comparison's page budget."""
+    return target.max_pages if target.max_pages > 0 else 200
+
+
+def tool_depth(name: str, target: Target) -> int:
+    """Map depth=0 to each tool's unlimited convention or a high sentinel."""
+    if target.depth != 0:
+        return target.depth
+    if name in {"basecrawler", "browcrawler", "gospider"}:
+        return 0  # These tools document zero as unlimited depth.
+    return 9_999_999  # Some CLIs treat zero as stop-at-seed; page/time budgets still apply.
 
 
 def find_chrome(override: Path | None) -> Path | None:
@@ -337,6 +360,21 @@ def build_command(
             )
         else:
             config_text += "\n" + obscura_setting + "\n"
+        if target.proxy:
+            upstream_setting = f"upstream_proxy: {json.dumps(target.proxy)}"
+            if re.search(r"(?m)^upstream_proxy\s*:", config_text):
+                config_text = re.sub(
+                    r"(?m)^upstream_proxy\s*:.*$", lambda _match: upstream_setting, config_text
+                )
+            else:
+                config_text += "\n" + upstream_setting + "\n"
+        if target.disable_bootstrap and re.search(r"(?m)^obey_robots\s*:", config_text):
+            config_text = re.sub(r"(?m)^obey_robots\s*:.*$", "obey_robots: false", config_text)
+        if target.max_response_bytes > 0 and re.search(r"(?m)^max_body_size\s*:", config_text):
+            config_text = re.sub(
+                r"(?m)^max_body_size\s*:.*$",
+                f"max_body_size: {target.max_response_bytes}", config_text,
+            )
         config = run_dir / "browcrawler-config.yaml"
         config.write_text(config_text, encoding="utf-8")
         discovered = run_dir / "discovered.jsonl"
@@ -344,10 +382,13 @@ def build_command(
             "--config", str(config), "--url", target.seed,
             "--scope-mode", "fqdn", "--depth", str(target.depth),
             "--max-pages", str(target.max_pages), "--host-rate", str(target.host_rate),
-            "--interactions", "0", "--no-forms", "--obey-robots",
+            "--basecrawler-max-urls", str(browcrawler_static_budget(target)),
+            "--interactions", "0", "--no-forms",
             "--backend", "obscura", "--concurrency", "1",
             "--discovered", str(discovered),
         ]
+        if not target.disable_bootstrap:
+            command.append("--obey-robots")
         return command, cwd, None
 
     if name == "basecrawler" and binary is None:
@@ -369,8 +410,9 @@ def build_command(
         report = run_dir / "scan-report.json"
         discoveries = run_dir / "discoveries.jsonl"
         command = exe_prefix + [
-            "-u", target.seed, "-d", str(target.depth), "-c", str(target.concurrency),
+            "-u", target.seed, "-d", str(tool_depth(name, target)), "-c", str(target.concurrency),
             "--timeout", str(target.timeout), "--max-urls", str(target.max_pages),
+            "--max-body", str(target.max_response_bytes),
             "--scope", "fqdn", "--rl", str(max(1, int(target.host_rate))),
             "--phc", str(max(1, min(target.concurrency, 4))),
             "--no-fuzz", "--no-testfill", "--no-unsafe-send",
@@ -378,19 +420,21 @@ def build_command(
             "--discoveries", str(discoveries),
             "-O", "json", "-o", str(output),
         ]
+        if target.disable_bootstrap:
+            command.extend(["--no-robots", "--no-sitemap", "--no-llms", "--no-probe-openapi"])
     elif name == "katana":
-        command = [exe, "-u", target.seed, "-d", str(target.depth), "-c", str(target.concurrency),
+        command = [exe, "-u", target.seed, "-d", str(tool_depth(name, target)), "-c", str(target.concurrency),
                    "-timeout", str(target.timeout), "-rl", str(max(1, int(target.host_rate))),
                    "-hrl", str(max(1, int(target.host_rate))), "-fs", "fqdn", "-jc", "-j",
                    "-ob", "-or", "-ct", "60s", "-silent", "-duc", "-o", str(output)]
     elif name == "hakrawler":
-        command = [exe, "-d", str(target.depth), "-t", str(target.concurrency),
+        command = [exe, "-d", str(tool_depth(name, target)), "-t", str(target.concurrency),
                    "-timeout", str(target.timeout), "-u", "-s"]
     elif name == "gospider":
-        command = [exe, "-s", target.seed, "-d", str(target.depth), "-c", str(target.concurrency),
+        command = [exe, "-s", target.seed, "-d", str(tool_depth(name, target)), "-c", str(target.concurrency),
                    "-m", str(target.max_pages)]
     elif name == "cariddi":
-        command = [exe, "-md", str(target.depth), "-c", str(target.concurrency),
+        command = [exe, "-md", str(tool_depth(name, target)), "-c", str(target.concurrency),
                    "-t", str(target.timeout), "-plain"]
     elif name == "urlfinder":
         command = [exe, "-u", target.seed, "-d", host, "-m", "2", "-s", "all",
@@ -408,8 +452,9 @@ def build_command(
     elif name == "argo":
         if not chrome:
             return None, cwd, "Chrome/Edge not found; set --chrome"
-        command = [exe, "--chrome", str(chrome), "--engine", "hybrid", "--maxdepth", str(target.depth),
-                   "--hostrate", str(target.host_rate), "--rate", str(target.host_rate),
+        command = [exe, "--chrome", str(chrome), "--engine", "hybrid", "--maxdepth", str(tool_depth(name, target)),
+                   "--hostrate", str(max(1, int(target.host_rate))), "--rate", str(max(1, int(target.host_rate))),
+                   "--browsertimeout", "120", "--tabtimeout", str(target.timeout),
                    "--tabcount", str(max(1, min(target.concurrency, 4))), "--fuzz=false",
                    "--scope", f"^https?://{re.escape(host)}(:[0-9]+)?/",
                    "--outputdir", str(run_dir), "--format", "json", "--target", target.seed]
@@ -418,13 +463,32 @@ def build_command(
                    "--output", str(run_dir), "--url", target.seed]
     elif name == "jshunter":
         output = run_dir / "jshunter.json"
-        command = [exe, "--url", target.seed, "--crawl", str(target.depth), "--domain", host,
+        command = [exe, "--url", target.seed, "--crawl", str(tool_depth(name, target)), "--domain", host,
                    "--threads", str(target.concurrency), "--rate-limit",
                    str(max(1, int(1000 / max(target.host_rate, 0.1)))),
-                   "--max-bytes", "2097152", "--json", "--output", str(output)]
+                    "--max-bytes", str(target.max_response_bytes), "--json", "--output", str(output)]
     else:
         return None, cwd, f"no command adapter implemented for {name}"
 
+    if target.proxy:
+        proxy_flags = {
+            "basecrawler": ["--proxy", target.proxy],
+            "katana": ["-proxy", target.proxy],
+            "hakrawler": ["-proxy", target.proxy],
+            "gospider": ["--proxy", target.proxy],
+            "cariddi": ["-proxy", target.proxy],
+            "urlfinder": ["-x", target.proxy],
+            "crawlergo": ["--request-proxy", target.proxy],
+            "argo": ["--proxy", target.proxy],
+        }.get(name)
+        if name == "jshunter":
+            parsed_proxy = urlsplit(target.proxy if "://" in target.proxy else "http://" + target.proxy)
+            proxy_flags = ["--proxy", parsed_proxy.netloc]
+        if proxy_flags:
+            if name == "crawlergo":
+                command[-1:-1] = proxy_flags
+            else:
+                command.extend(proxy_flags)
     return command, cwd, None
 
 
@@ -766,6 +830,9 @@ def recover_report(output_dir: Path, site_ids: set[str] | None = None) -> int:
             depth=int(item.get("depth", 3)), max_pages=int(item.get("max_pages", 500)),
             concurrency=int(item.get("concurrency", 10)), timeout=int(item.get("timeout", 10)),
             host_rate=float(item.get("host_rate", 1)), optional=bool(item.get("optional", False)),
+            max_response_bytes=int(item.get("max_response_bytes", 2_097_152)),
+            proxy=str(item.get("proxy", "")),
+            disable_bootstrap=bool(item.get("disable_bootstrap", False)),
         ) for item in metadata.get("targets", [])
     }
     if site_ids is not None:
@@ -1063,6 +1130,14 @@ def self_test() -> int:
         "host_rate": 1.0,
     })
     assert custom.allowed_hosts == ("example.com",)
+    unbounded = target_from_json({
+        "site_id": "unbounded", "seed": "https://example.com/", "allowed_hosts": ["example.com"],
+        "depth": 0, "max_response_bytes": 16_777_216,
+        "proxy": "socks5://127.0.0.1:10808", "disable_bootstrap": True,
+    })
+    assert tool_depth("basecrawler", unbounded) == 0
+    assert tool_depth("gospider", unbounded) == 0
+    assert tool_depth("katana", unbounded) == 9_999_999
     urls = extract_urls('\x1b[32mURL: https://example.com/a?q=1#x\x1b[0m\n{"url":"http://other.test/b"}')
     assert "https://example.com/a?q=1#x" in urls
     assert "http://other.test/b" in urls
@@ -1083,6 +1158,7 @@ def self_test() -> int:
     }
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
+        assert browcrawler_static_budget(custom) == (custom.max_pages if custom.max_pages > 0 else 200)
         command, _, error = build_command("basecrawler", custom, temp_path)
         assert error is None and command is not None
         rate_index = command.index("--rl")
@@ -1091,6 +1167,31 @@ def self_test() -> int:
         assert command[report_index + 1] == str(temp_path / "scan-report.json")
         discovery_index = command.index("--discoveries")
         assert command[discovery_index + 1] == str(temp_path / "discoveries.jsonl")
+        jshunter_command, _, error = build_command("jshunter", unbounded, temp_path)
+        assert error is None and jshunter_command is not None
+        assert jshunter_command[jshunter_command.index("--crawl") + 1] == "9999999"
+        assert jshunter_command[jshunter_command.index("--max-bytes") + 1] == "16777216"
+        assert jshunter_command[jshunter_command.index("--proxy") + 1] == "127.0.0.1:10808"
+        argo_command, _, error = build_command("argo", unbounded, temp_path, chrome=Path("chrome.exe"))
+        assert error is None and argo_command is not None
+        assert argo_command[argo_command.index("--hostrate") + 1] == "1"
+        assert argo_command[argo_command.index("--proxy") + 1] == "socks5://127.0.0.1:10808"
+        base_command, _, error = build_command("basecrawler", unbounded, temp_path)
+        assert error is None and base_command is not None
+        assert "--no-probe-openapi" in base_command and "--no-sitemap" in base_command
+        assert base_command[base_command.index("--max-body") + 1] == "16777216"
+        brow_command, _, error = build_command("browcrawler", unbounded, temp_path)
+        assert error is None and brow_command is not None
+        assert "--obey-robots" not in brow_command
+        brow_config_text = (temp_path / "browcrawler-config.yaml").read_text(encoding="utf-8")
+        assert "max_body_size: 16777216" in brow_config_text
+        assert 'upstream_proxy: "socks5://127.0.0.1:10808"' in brow_config_text
+        crawlergo_command, _, error = build_command(
+            "crawlergo", unbounded, temp_path, chrome=Path("chrome.exe"), allow_form_submit=True
+        )
+        assert error is None and crawlergo_command is not None
+        assert crawlergo_command[-3:-1] == ["--request-proxy", "socks5://127.0.0.1:10808"]
+        assert crawlergo_command[-1] == unbounded.seed
         (temp_path / "tool-output.jsonl").write_text(
             '{"url":"https://example.com/visited"}\n', encoding="utf-8"
         )

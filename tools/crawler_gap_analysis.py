@@ -47,6 +47,7 @@ def explain(observations, fetched, discovered, depth, reasons):
 
 def analyze(root):
     config = json.loads((root / 'config.json').read_text(encoding='utf-8'))
+    frozen = json.loads((Path(config['reference']) / 'frozen.json').read_text(encoding='utf-8')) if 'reference' in config else None
     references = collections.defaultdict(list)
     folders = sorted(p for p in root.glob('round-*/*') if p.is_dir())
     for folder in folders:
@@ -69,7 +70,8 @@ def analyze(root):
         reasons = {r['code'] for r in report['runs']['basecrawler'].get('crawl_completion', {}).get('reasons', [])}
         for url in report['missing']:
             details.append({'round': folder.parent.name, 'site': folder.name, 'url': url,
-                            'evidence': explain(references[(folder.name, url)], fetched, discovered, config['depth'], reasons),
+                            'evidence': explain(references[(folder.name, url)], fetched, discovered,
+                                                frozen['sites'][folder.name]['settings']['depth'] if frozen else config['depth'], reasons),
                             'note': 'Source evidence classifies the next diagnostic step; it does not prove a parser defect.'})
     bench.write_json(root / 'gap-analysis.json', details)
     counts = collections.Counter((d['site'], e['finding']) for d in details for e in d['evidence'])

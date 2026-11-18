@@ -62,7 +62,8 @@ def candidates(folder, mode, target):
                 continue
             method = (req.get('method') or 'GET').upper()
             entry = {'url': url, 'method': method, 'source': req.get('source', ''),
-                     'params': req.get('params', []), 'json_body_params': req.get('json_body_params', [])}
+                     'params': req.get('params', []), 'json_body_params': req.get('json_body_params', []),
+                     'referer': req.get('referer') or req.get('headers', {}).get('Referer') or (req.get('source','') if str(req.get('source','')).startswith('http') else '')}
             result[(method, url, tuple(sorted(entry['params'] or [])),
                     tuple(sorted(entry['json_body_params'] or [])))] = entry
     return list(result.values())
@@ -71,16 +72,12 @@ def candidates(folder, mode, target):
 def run_one(target, mode, args):
     folder = args.output / target.site_id / mode
     folder.mkdir(parents=True, exist_ok=True)
-    if args.resume and (folder / 'run.json').exists():
-        previous = json.loads((folder / 'run.json').read_text())
-        if previous['status'] == 'completed':
-            return previous
     if mode == 'basecrawler':
         command = [str(args.base), '-u', target.seed, '-d', str(args.depth), '-c', '1',
                    '--max-urls', str(args.pages), '--timeout', '15', '--max-body', '16777216',
                    '--scope', 'fqdn', '--rl', str(args.rate), '--ct', str(args.seconds) + 's',
                    '--no-fuzz', '--no-testfill', '--no-probe-openapi', '--fsu', '-s', 'all',
-                   '--stable-host-order', '--discoveries', str(folder / 'discoveries.jsonl'),
+                   '--stable-host-order', '-v', '--discoveries', str(folder / 'discoveries.jsonl'),
                    '--report', str(folder / 'report.json'), '-o', str(folder / 'results.jsonl')]
         command += ['--strategy', args.strategy]
     else:
@@ -92,8 +89,15 @@ def run_one(target, mode, args):
         command += ['-s', args.strategy]
         if mode == 'katana-browser':
             command += ['-hl', '-sc', '-scp', str(args.chrome), '-nos', '-xhr']
+            command += ['-ho', 'disable-features=HttpsUpgrades,HttpsFirstBalancedModeAutoEnable']
     if args.proxy:
         command += ['--proxy' if mode == 'basecrawler' else '-proxy', args.proxy]
+    binary_hash = hashlib.sha256(Path(command[0]).read_bytes()).hexdigest()
+    if args.resume and (folder / 'run.json').exists() and (folder / 'command.json').exists():
+        previous = json.loads((folder / 'run.json').read_text())
+        previous_command = json.loads((folder / 'command.json').read_text())['command']
+        if previous['status'] == 'completed' and previous_command == command and previous.get('binary_sha256') == binary_hash:
+            return previous
     write_json(folder / 'command.json', {'command': command, 'seed': target.seed,
                'scope': target.allowed_hosts, 'started_at': time.strftime('%Y-%m-%dT%H:%M:%S%z')})
     started = time.monotonic()
@@ -109,14 +113,20 @@ def run_one(target, mode, args):
     (folder / 'stderr.txt').write_text(stderr, encoding='utf-8')
     rows = candidates(folder, mode, target)
     raw_rows = jsonlines(folder / 'results.jsonl')
-    if mode != 'basecrawler' and raw_rows and all(r.get('error') for r in raw_rows):
+    if mode != 'basecrawler' and raw_rows and all(r.get('error') and r.get('error') != 'max depth reached' for r in raw_rows):
         status = 'failed_requests'
+    completion = {}
+    if mode == 'basecrawler' and (folder / 'report.json').exists():
+        completion = json.loads((folder / 'report.json').read_text()).get('completion', {})
+        reasons = {r['code'] for r in completion.get('reasons', [])}
+        if status == 'completed' and reasons & {'request_failure', 'analysis_failure', 'fatal_error', 'canceled'}:
+            status = 'partial_failure'
     if status == 'completed' and not rows:
         status = 'empty_unverified'
     write_json(folder / 'candidates.json', rows)
     record = {'site': target.site_id, 'mode': mode, 'status': status, 'exit_code': code,
               'seconds': time.monotonic() - started, 'candidates': len(rows),
-              'binary_sha256': hashlib.sha256(Path(command[0]).read_bytes()).hexdigest(),
+              'binary_sha256': binary_hash, 'crawl_completion': completion,
               'request_errors': sum(bool(r.get('error')) and r.get('error') != 'max depth reached' for r in raw_rows),
               'boundary_discoveries': sum(r.get('error') == 'max depth reached' for r in raw_rows)}
     write_json(folder / 'run.json', record)
@@ -124,16 +134,22 @@ def run_one(target, mode, args):
     return record
 
 
-def fetch(url, timeout):
+def fetch(url, timeout, proxy='', referer=''):
     started = time.monotonic()
     try:
         # Windows/Python urllib cannot use the configured SOCKS proxy. curl
         # shares the actual environment proxy profile used by the crawlers.
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp) / 'body'
-            r = subprocess.run([shutil.which('curl.exe') or 'curl', '-sS', '-L', '--max-time', str(timeout),
+            command = [shutil.which('curl.exe') or 'curl', '-sS', '-L', '--max-time', str(timeout),
                                 '--max-filesize', '2097152', '-A', 'CrawlerBenchmark/1.0',
-                                '-o', str(output), '-w', '%{json}', url], capture_output=True, timeout=timeout+3)
+                                '-o', str(output), '-w', '%{json}']
+            if proxy: command += ['--proxy', proxy]
+            if referer:
+                a,b=urlsplit(url),urlsplit(referer)
+                if (a.scheme.lower(),a.netloc.lower()) == (b.scheme.lower(),b.netloc.lower()):
+                    command += ['-H','Referer: '+referer,'-H','Sec-Fetch-Site: same-origin']
+            r = subprocess.run(command + [url], capture_output=True, timeout=timeout+3)
             meta = json.loads(r.stdout)
             if r.returncode and r.returncode != 63:
                 raise ValueError(r.stderr.decode('utf-8', errors='replace'))
@@ -147,6 +163,7 @@ def fetch(url, timeout):
                     'sha256': hashlib.sha256(body).hexdigest(),
                     'canonical': urljoin(meta.get('url_effective', url), canonical[1]) if canonical else '',
                     'title': title[1].strip() if title else '',
+                    'observed_referer': referer,
                     'seconds': time.monotonic() - started, 'error': ''}
     except Exception as e:
         return {'url': url, 'status': 0, 'error': str(e), 'seconds': time.monotonic() - started}
@@ -182,6 +199,9 @@ def classify(row, control):
 def verify_site(target, args):
     site = args.output / target.site_id
     data = {m: json.loads((site / m / 'candidates.json').read_text(encoding='utf-8')) for m in MODES}
+    if getattr(args, 'reference_snapshot', None):
+        for mode in MODES[1:]:
+            data[mode] = json.loads((args.reference_snapshot / target.site_id / (mode + '.json')).read_text(encoding='utf-8'))
     # Only real GET pages/data can be verified with GET. POST and template
     # contracts remain visible but never receive invented success labels.
     def eligible(row):
@@ -198,7 +218,7 @@ def verify_site(target, args):
     ref_paths = {alias_path(u) for u in reference}
     potential_aliases = {u for u in sets['basecrawler'] if alias_path(u) in ref_paths}
     urls = sorted(reference | potential_aliases, key=lambda u: hashlib.sha256(u.encode()).hexdigest())
-    cache = {r['url']: r for r in jsonlines(site / 'verification.jsonl') if r.get('status') and not r.get('error') and not r.get('truncated')}
+    cache = {r['url']: r for r in jsonlines(site / 'verification.jsonl') if r.get('status') and r.get('status') not in (400,401,403,429) and not r.get('error') and not r.get('truncated')}
     control_url = urljoin(target.seed, '/__crawler_benchmark_missing_20261118__')
     control_path = site / 'control.json'
     control = json.loads(control_path.read_text()) if control_path.exists() else {}
@@ -206,7 +226,7 @@ def verify_site(target, args):
     # failure during resume must not silently replace the baseline control.
     if not usable_control(control):
         for _ in range(2):
-            control = fetch(control_url, args.verify_timeout)
+            control = fetch(control_url, args.verify_timeout, args.proxy)
             if usable_control(control):
                 break
         write_json(control_path, control)
@@ -216,14 +236,27 @@ def verify_site(target, args):
     site.mkdir(parents=True, exist_ok=True)
     start_lock = threading.Lock()
     next_start = 0.0
-    def limited_fetch(url):
+    def request_once(url,referer=''):
         nonlocal next_start
         with start_lock:
             delay = next_start - time.monotonic()
             if delay > 0:
                 time.sleep(delay)
             next_start = time.monotonic() + 1 / args.rate
-        return fetch(url, args.verify_timeout)
+        return fetch(url,args.verify_timeout,args.proxy,referer)
+    def limited_fetch(url):
+        row = request_once(url)
+        if row.get('status') in (400,401,403):
+            origin=urlsplit(url)
+            ref=next((r.get('referer','') for rows in data.values() for r in rows if r['url']==url and r.get('referer') and
+                      (urlsplit(r['referer']).scheme,urlsplit(r['referer']).netloc)==(origin.scheme,origin.netloc)), '')
+            if ref:
+                context = request_once(url,ref)
+                if 200<=context.get('status',0)<300:
+                    context['initial_status']=row['status']
+                    context['verification_profile']='observed_same_origin'
+                    row=context
+        return row
     with (site / 'verification.jsonl').open('a', encoding='utf-8') as f:
         with concurrent.futures.ThreadPoolExecutor(max_workers=args.verify_workers) as pool:
             futures = [pool.submit(limited_fetch, url) for url in pending]
@@ -265,7 +298,7 @@ def verify_site(target, args):
             run['request_errors'] = sum(bool(r.get('error')) and r.get('error') != 'max depth reached' for r in raw_rows)
             run['boundary_discoveries'] = sum(r.get('error') == 'max depth reached' for r in raw_rows)
             write_json(site / m / 'run.json', run)
-        if m != 'basecrawler' and raw_rows and all(r.get('error') for r in raw_rows):
+        if m != 'basecrawler' and raw_rows and all(r.get('error') and r.get('error') != 'max depth reached' for r in raw_rows):
             run['status'] = 'failed_requests'
             write_json(site / m / 'run.json', run)
     ratio = len(covered) / len(valid) if valid else None

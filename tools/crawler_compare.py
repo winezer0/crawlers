@@ -90,6 +90,14 @@ TARGETS: dict[str, Target] = {
         "framework-react", "https://react.dev/learn", "framework-react",
         depth=1, max_pages=20, concurrency=1, timeout=15, host_rate=1,
     ),
+    "app-react-todomvc": _target(
+        "app-react-todomvc", "https://todomvc.com/examples/react/dist/", "react-app",
+        depth=2, max_pages=50, concurrency=1, timeout=15, host_rate=2,
+    ),
+    "app-vue-todomvc": _target(
+        "app-vue-todomvc", "https://todomvc.com/examples/vue/", "vue-app",
+        depth=2, max_pages=50, concurrency=1, timeout=15, host_rate=2,
+    ),
     "framework-angular": _target(
         "framework-angular", "https://angular.dev/tutorials/first-app", "framework-angular",
         depth=1, max_pages=20, concurrency=1, timeout=15, host_rate=1,

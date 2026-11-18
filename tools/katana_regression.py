@@ -69,6 +69,7 @@ def main():
     p.add_argument('--reference-runs-from', type=Path, help='reuse explicitly recorded Katana runs with identical target/budget/proxy configuration')
     p.add_argument('--resume', action='store_true')
     p.add_argument('--summarize-only', action='store_true')
+    p.add_argument('--verify-only', action='store_true', help='reuse saved runs and only finish HTTP verification/reporting')
     args = p.parse_args()
     if min(args.rounds, args.seconds, args.pages, args.depth, args.rate, args.workers) < 1:
         p.error('rounds, seconds, pages, depth, rate, workers must be positive')
@@ -78,7 +79,7 @@ def main():
         aggregate(args.output, targets, args.rounds)
         return
     config = vars(args).copy()
-    config.pop('resume'); config.pop('summarize_only'); config.pop('output')
+    config.pop('resume'); config.pop('summarize_only'); config.pop('verify_only'); config.pop('output')
     config = {k:str(v.resolve()) if isinstance(v,Path) else v for k,v in config.items()}
     config['base_sha256'] = hashlib.sha256(args.base.read_bytes()).hexdigest()
     config['katana_sha256'] = hashlib.sha256((bench.ROOT / 'othercrawlers/katana.exe').read_bytes()).hexdigest()
@@ -114,7 +115,7 @@ def main():
         p.error('Chrome is required for the browser reference')
     args.verify_timeout = 12; args.verify_workers = 4; args.verify_limit = 0
     root = args.output
-    for n in range(1, args.rounds + 1):
+    for n in ([] if args.verify_only else range(1, args.rounds + 1)):
         run_args = copy.copy(args); run_args.output = root / f'round-{n:02}'
         order = bench.MODES[(n-1) % 3:] + bench.MODES[:(n-1) % 3]
         def run_site(target):

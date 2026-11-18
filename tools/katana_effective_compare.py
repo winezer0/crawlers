@@ -94,8 +94,8 @@ def run_one(target, mode, args):
         command += ['--proxy' if mode == 'basecrawler' else '-proxy', args.proxy]
     binary_hash = hashlib.sha256(Path(command[0]).read_bytes()).hexdigest()
     if args.resume and (folder / 'run.json').exists() and (folder / 'command.json').exists():
-        previous = json.loads((folder / 'run.json').read_text())
-        previous_command = json.loads((folder / 'command.json').read_text())['command']
+        previous = json.loads((folder / 'run.json').read_text(encoding='utf-8'))
+        previous_command = json.loads((folder / 'command.json').read_text(encoding='utf-8'))['command']
         if previous['status'] == 'completed' and previous_command == command and previous.get('binary_sha256') == binary_hash:
             return previous
     write_json(folder / 'command.json', {'command': command, 'seed': target.seed,
@@ -117,7 +117,7 @@ def run_one(target, mode, args):
         status = 'failed_requests'
     completion = {}
     if mode == 'basecrawler' and (folder / 'report.json').exists():
-        completion = json.loads((folder / 'report.json').read_text()).get('completion', {})
+        completion = json.loads((folder / 'report.json').read_text(encoding='utf-8')).get('completion', {})
         reasons = {r['code'] for r in completion.get('reasons', [])}
         if status == 'completed' and reasons & {'request_failure', 'analysis_failure', 'fatal_error', 'canceled'}:
             status = 'partial_failure'
@@ -221,7 +221,7 @@ def verify_site(target, args):
     cache = {r['url']: r for r in jsonlines(site / 'verification.jsonl') if r.get('status') and r.get('status') not in (400,401,403,429) and not r.get('error') and not r.get('truncated')}
     control_url = urljoin(target.seed, '/__crawler_benchmark_missing_20261118__')
     control_path = site / 'control.json'
-    control = json.loads(control_path.read_text()) if control_path.exists() else {}
+    control = json.loads(control_path.read_text(encoding='utf-8')) if control_path.exists() else {}
     # Freeze a successful control alongside the per-URL evidence. A transient
     # failure during resume must not silently replace the baseline control.
     if not usable_control(control):
@@ -288,7 +288,7 @@ def verify_site(target, args):
                         'analysis': '' if hit else 'Requires source trace; no URL-count-based explanation inferred.'})
     (site / 'comparison.jsonl').write_text(''.join(json.dumps(r, ensure_ascii=False)+'\n' for r in details), encoding='utf-8')
     unresolved = sorted(u for u in reference if categories.get(u) not in ('valid_page', 'valid_json', 'not_found', 'html_fallback', 'soft_404', 'other_content'))
-    runs = {m: json.loads((site / m / 'run.json').read_text()) for m in MODES}
+    runs = {m: json.loads((site / m / 'run.json').read_text(encoding='utf-8')) for m in MODES}
     for m, run in runs.items():
         if run['status'] == 'completed' and not data[m]:
             run['status'] = 'empty_unverified'

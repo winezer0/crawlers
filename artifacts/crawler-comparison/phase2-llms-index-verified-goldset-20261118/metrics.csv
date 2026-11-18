@@ -1,0 +1,6 @@
+﻿site_id,sitemap_urls,llms_urls,seed_links,navigation_graph_urls,navigation_pages_fetched,navigation_page_cap_reached,source_unique_urls,verified_gold_urls,verified_pages,verified_api_documentation_pages,verified_api_endpoints,candidate_urls,route_candidates_ex_assets,http_accessible_route_candidates,true_positives,gold_precision,gold_recall
+framework-vue,110,94,68,0,0,False,176,176,145,31,0,202,190,176,176,0.9263,1.0000
+framework-react,0,181,61,217,62,False,217,216,86,130,0,233,204,188,188,0.9216,0.8704
+framework-angular,1628,85,11,0,0,False,1629,1629,463,1166,0,1658,1643,1631,1628,0.9909,0.9994
+framework-nextjs,1147,959,45,0,0,False,1319,1314,725,589,0,1365,1330,1315,1314,0.9880,1.0000
+framework-sveltekit,0,193,90,627,91,False,646,532,532,0,0,409,368,340,339,0.9212,0.6372

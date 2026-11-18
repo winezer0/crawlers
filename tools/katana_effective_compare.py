@@ -22,6 +22,7 @@ from pathlib import Path
 from urllib.parse import urljoin, urlsplit
 
 import crawler_compare as common
+from crawler_metrics import protocol_headers, protocol_identity, is_rsc, equivalent_rsc, mode_metrics, gap_evidence
 
 ROOT = common.ROOT
 MODES = ('basecrawler', 'katana-static', 'katana-browser')
@@ -62,6 +63,7 @@ def candidates(folder, mode, target):
                 continue
             method = (req.get('method') or 'GET').upper()
             entry = {'url': url, 'method': method, 'source': req.get('source', ''),
+				     'headers': protocol_headers(req.get('headers')),
                      'params': req.get('params', []), 'json_body_params': req.get('json_body_params', []),
                      'referer': req.get('referer') or req.get('headers', {}).get('Referer') or (req.get('source','') if str(req.get('source','')).startswith('http') else '')}
             result[(method, url, tuple(sorted(entry['params'] or [])),
@@ -118,6 +120,8 @@ def run_one(target, mode, args):
     completion = {}
     if mode == 'basecrawler' and (folder / 'report.json').exists():
         completion = json.loads((folder / 'report.json').read_text(encoding='utf-8')).get('completion', {})
+        if status == 'completed' and completion.get('status') in ('timed_out','canceled','failed'):
+            status = {'timed_out':'timeout','canceled':'canceled','failed':'failed'}[completion['status']]
         reasons = {r['code'] for r in completion.get('reasons', [])}
         if status == 'completed' and reasons & {'request_failure', 'analysis_failure', 'fatal_error', 'canceled'}:
             status = 'partial_failure'
@@ -130,11 +134,15 @@ def run_one(target, mode, args):
               'request_errors': sum(bool(r.get('error')) and r.get('error') != 'max depth reached' for r in raw_rows),
               'boundary_discoveries': sum(r.get('error') == 'max depth reached' for r in raw_rows)}
     write_json(folder / 'run.json', record)
-    print(json.dumps(record), flush=True)
+    log_record = {k:v for k,v in record.items() if k != 'crawl_completion'}
+    log_record['completion_status'] = completion.get('status')
+    log_record['completion_reasons'] = completion.get('reasons', [])
+    log_record['unvisited_count'] = len(completion.get('unvisited', []))
+    print(json.dumps(log_record), flush=True)
     return record
 
 
-def fetch(url, timeout, proxy='', referer=''):
+def fetch(url, timeout, proxy='', referer='', request_headers=None):
     started = time.monotonic()
     try:
         # Windows/Python urllib cannot use the configured SOCKS proxy. curl
@@ -145,6 +153,10 @@ def fetch(url, timeout, proxy='', referer=''):
                                 '--max-filesize', '2097152', '-A', 'CrawlerBenchmark/1.0',
                                 '-o', str(output), '-w', '%{json}']
             if proxy: command += ['--proxy', proxy]
+
+            for name, value in protocol_headers(request_headers).items():
+                if '\r' not in value and '\n' not in value:
+                    command += ['-H', name + ': ' + value]
             if referer:
                 a,b=urlsplit(url),urlsplit(referer)
                 if (a.scheme.lower(),a.netloc.lower()) == (b.scheme.lower(),b.netloc.lower()):
@@ -164,6 +176,8 @@ def fetch(url, timeout, proxy='', referer=''):
                     'canonical': urljoin(meta.get('url_effective', url), canonical[1]) if canonical else '',
                     'title': title[1].strip() if title else '',
                     'observed_referer': referer,
+                    'request_headers': protocol_headers(request_headers),
+                    'verified_at': time.strftime('%Y-%m-%dT%H:%M:%S%z'),
                     'seconds': time.monotonic() - started, 'error': ''}
     except Exception as e:
         return {'url': url, 'status': 0, 'error': str(e), 'seconds': time.monotonic() - started}
@@ -181,6 +195,10 @@ def classify(row, control):
         return 'unconfirmed'
     if row.get('truncated'):
         return 'body_truncated'
+    if is_rsc(row.get('url', '')) or protocol_headers(row.get('request_headers')).get('rsc') == '1':
+        if protocol_headers(row.get('request_headers')).get('rsc') != '1':
+            return 'protocol_context_missing'
+        return 'valid_rsc' if 'text/x-component' in row.get('content_type', '').lower() else 'protocol_fallback'
     if row.get('final_url') != row.get('url') and re.search(r'/(?:login|signin|sign-in)(?:/|$)', urlsplit(row.get('final_url', '')).path, re.I):
         return 'authentication_redirect'
     if row.get('sha256') == control.get('sha256') and 'html' in row.get('content_type', ''):
@@ -199,6 +217,12 @@ def classify(row, control):
 def verify_site(target, args):
     site = args.output / target.site_id
     data = {m: json.loads((site / m / 'candidates.json').read_text(encoding='utf-8')) for m in MODES}
+    # Frozen candidate files predate protocol metadata. Enrich in memory from
+    # their raw records without changing the frozen reference or rerunning it.
+    for mode in MODES:
+        observed = {r['url']: r.get('headers', {}) for r in candidates(site / mode, mode, target) if r.get('headers')}
+        for row in data[mode]:
+            if observed.get(row['url']): row['headers'] = observed[row['url']]
     if getattr(args, 'reference_snapshot', None):
         for mode in MODES[1:]:
             data[mode] = json.loads((args.reference_snapshot / target.site_id / (mode + '.json')).read_text(encoding='utf-8'))
@@ -215,10 +239,26 @@ def verify_site(target, args):
     def alias_path(u):
         p = urlsplit(u)
         return p.netloc, p.path.removesuffix('.html').rstrip('/')
-    ref_paths = {alias_path(u) for u in reference}
-    potential_aliases = {u for u in sets['basecrawler'] if alias_path(u) in ref_paths}
+    prior = {r['url']:r for r in jsonlines(site/'verification.jsonl')}
+    # Image proxy endpoints may have no extension. Hundreds of new image query
+    # values cannot prove a page alias and need not be probed for that purpose.
+    ref_paths = {alias_path(u) for u in reference if u not in prior or is_rsc(u)
+                 or any(t in prior[u].get('content_type','').lower() for t in ('html','json'))}
+    observed_headers = {}
+    for m in reversed(MODES[1:] + MODES[:1]):
+        for r in data[m]:
+            if r.get('headers'): observed_headers[r['url']] = r['headers']
+    base_headers = {r['url']:r['headers'] for r in data['basecrawler'] if r.get('headers')}
+    ref_protocols = {protocol_identity(u,observed_headers.get(u)) for u in reference if is_rsc(u)} - {None}
+    potential_aliases = {u for u in sets['basecrawler'] if alias_path(u) in ref_paths and
+                         (not is_rsc(u) or protocol_identity(u,base_headers.get(u)) in ref_protocols)}
     urls = sorted(reference | potential_aliases, key=lambda u: hashlib.sha256(u.encode()).hexdigest())
+    headers = {u: observed_headers.get(u,{}) for u in urls}
+    for u in urls:
+        if u in base_headers and protocol_identity(u,base_headers[u]) == protocol_identity(u,headers[u]):
+            headers[u] = dict(headers[u], **base_headers[u])
     cache = {r['url']: r for r in jsonlines(site / 'verification.jsonl') if r.get('status') and r.get('status') not in (400,401,403,429) and not r.get('error') and not r.get('truncated')}
+    cache = {u:r for u,r in cache.items() if not is_rsc(u) or (headers.get(u) and protocol_headers(r.get('request_headers')) == headers[u])}
     control_url = urljoin(target.seed, '/__crawler_benchmark_missing_20261118__')
     control_path = site / 'control.json'
     control = json.loads(control_path.read_text(encoding='utf-8')) if control_path.exists() else {}
@@ -243,9 +283,12 @@ def verify_site(target, args):
             if delay > 0:
                 time.sleep(delay)
             next_start = time.monotonic() + 1 / args.rate
-        return fetch(url,args.verify_timeout,args.proxy,referer)
+        return fetch(url,args.verify_timeout,args.proxy,referer,headers.get(url))
     def limited_fetch(url):
-        row = request_once(url)
+        origin = urlsplit(url)
+        ref = next((r.get('referer', '') for rows in data.values() for r in rows if r['url'] == url and r.get('referer') and
+                    (urlsplit(r['referer']).scheme, urlsplit(r['referer']).netloc) == (origin.scheme, origin.netloc)), '')
+        row = request_once(url, ref if is_rsc(url) else '')
         if row.get('status') in (400,401,403):
             origin=urlsplit(url)
             ref=next((r.get('referer','') for rows in data.values() for r in rows if r['url']==url and r.get('referer') and
@@ -268,28 +311,33 @@ def verify_site(target, args):
                 if i % 50 == 0:
                     print(json.dumps({'site': target.site_id, 'verified_new': i, 'pending_total': len(pending)}), flush=True)
     categories = {u: classify(v, control) for u, v in cache.items()}
-    valid = {u for u in reference if categories.get(u) in ('valid_page', 'valid_json')}
+    valid = {u for u in reference if categories.get(u) in ('valid_page', 'valid_json', 'valid_rsc')}
     base = sets['basecrawler']
     # Final URL and identical HTML allow confirmed aliases only. JSON content
     # equality does not establish endpoint equivalence.
-    base_finals = {cache[u].get('final_url') for u in base if u in cache}
+    base_finals = {cache[u].get('final_url') for u in base if u in cache and categories.get(u) in ('valid_page','valid_json')}
     base_hashes = {cache[u]['sha256'] for u in base if u in cache and categories.get(u) == 'valid_page'}
     covered, missing, details = [], [], []
     for url in sorted(valid):
         row = cache[url]
-        hit = url in base or row.get('final_url') in base_finals or (categories[url] == 'valid_page' and row.get('sha256') in base_hashes)
+        rsc_match = categories[url] == 'valid_rsc' and any(
+            equivalent_rsc(row,dict(cache[u],request_headers=base_headers.get(u,{})))
+            for u in base if u in cache)
+        hit = (url in base if categories[url] != 'valid_rsc' else rsc_match) or (categories[url] != 'valid_rsc' and row.get('final_url') in base_finals) or (categories[url] == 'valid_page' and row.get('sha256') in base_hashes)
         (covered if hit else missing).append(url)
-        match = ('exact' if url in base else 'redirect' if row.get('final_url') in base_finals
-                 else 'html_alias' if hit else 'missing')
+        match = ('exact' if url in base and hit else 'redirect' if row.get('final_url') in base_finals and hit
+                 else 'rsc_response_and_context' if rsc_match else 'html_alias' if hit else 'missing')
         details.append({'url': url, 'method': 'GET', 'base_covered': hit, 'match': match,
                         'reference_modes': [m for m in MODES[1:] if url in sets[m]],
                         'http_status': row['status'], 'content_type': row.get('content_type'),
                         'final_url': row.get('final_url'), 'sha256': row.get('sha256'),
                         'analysis': '' if hit else 'Requires source trace; no URL-count-based explanation inferred.'})
-    (site / 'comparison.jsonl').write_text(''.join(json.dumps(r, ensure_ascii=False)+'\n' for r in details), encoding='utf-8')
-    unresolved = sorted(u for u in reference if categories.get(u) not in ('valid_page', 'valid_json', 'not_found', 'html_fallback', 'soft_404', 'other_content'))
+    unresolved = sorted(u for u in reference if categories.get(u) not in ('valid_page', 'valid_json', 'valid_rsc', 'not_found', 'html_fallback', 'soft_404', 'other_content'))
     runs = {m: json.loads((site / m / 'run.json').read_text(encoding='utf-8')) for m in MODES}
     for m, run in runs.items():
+        if m == 'basecrawler' and run['status'] == 'completed' and run.get('crawl_completion',{}).get('status') in ('timed_out','canceled','failed'):
+            run['status'] = {'timed_out':'timeout','canceled':'canceled','failed':'failed'}[run['crawl_completion']['status']]
+            write_json(site/m/'run.json',run)
         if run['status'] == 'completed' and not data[m]:
             run['status'] = 'empty_unverified'
             write_json(site / m / 'run.json', run)
@@ -302,10 +350,24 @@ def verify_site(target, args):
             run['status'] = 'failed_requests'
             write_json(site / m / 'run.json', run)
     ratio = len(covered) / len(valid) if valid else None
-    report = {'site': target.site_id, 'reference_candidates': len(reference), 'verified_valid_reference': len(valid),
+    for detail in details:
+        detail['verification_request_headers'] = cache[detail['url']].get('request_headers', {})
+        if not detail['base_covered']:
+            detail['gap_evidence'] = gap_evidence(detail['url'], data, runs['basecrawler'], jsonlines(site/'basecrawler/results.jsonl'))
+    (site / 'comparison.jsonl').write_text(''.join(json.dumps(r, ensure_ascii=False)+'\n' for r in details), encoding='utf-8')
+    metrics = {m: mode_metrics(m, data[m], jsonlines(site/m/'results.jsonl'), runs[m]) for m in MODES}
+    for m in MODES[1:]:
+        refs = valid & sets[m]
+        metrics[m]['effective_reference'] = len(refs)
+        metrics[m]['base_covered'] = sum(u in covered for u in refs)
+    write_json(site/'metrics.json', {'modes':metrics, 'discovery_coverage':ratio,
+        'strict_acceptance_unchanged':True, 'protocol_evidence_required':True,
+        'reference_freshness':'historical frozen crawl; saved HTTP evidence may also be historical'})
+    report = {'schema_version':2, 'protocol_aware':True, 'site': target.site_id, 'reference_candidates': len(reference), 'verified_valid_reference': len(valid),
               'covered': len(covered), 'coverage': ratio, 'missing': missing, 'unresolved': unresolved,
               'verification_classes': dict(__import__('collections').Counter(categories.values())),
               'runs': runs, 'passed': bool(valid) and ratio >= .95 and not unresolved and all(r['status'] == 'completed' for r in runs.values()),
+              'discovery_coverage_passed': bool(valid) and ratio >= .95 and not unresolved,
               'note': 'HTTP-confirmed GET page/JSON coverage only; methods, templates and business semantics are not certified.'}
     write_json(site / 'effective.json', report)
     print(json.dumps({k: v for k, v in report.items() if k not in ('runs', 'missing', 'unresolved')}), flush=True)

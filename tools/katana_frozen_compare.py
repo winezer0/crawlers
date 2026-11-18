@@ -23,6 +23,11 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def scoring_fingerprint():
+    return {name:digest(Path(__file__).parent/name) for name in
+            ('katana_frozen_compare.py','katana_effective_compare.py','crawler_metrics.py')}
+
+
 def select_maximum(folders):
     # Count distinct method/URL pairs, not duplicate output lines or parameter
     # annotations. Never combine different runs to construct a larger reference.
@@ -90,6 +95,9 @@ def summarize(output, targets, rounds):
                 for n in range(1, rounds + 1)]
         stability = min((jaccard(a, b) for i, a in enumerate(sets) for b in sets[i+1:]), default=1)
         sites.append({'site': target.site_id, 'coverage': [r['coverage'] for r in reports],
+                      'metrics': [read(output / f'round-{n:02}' / target.site_id / 'metrics.json')
+                                  for n in range(1, rounds + 1)
+                                  if (output / f'round-{n:02}' / target.site_id / 'metrics.json').exists()],
                       'base_seconds': [r['runs']['basecrawler']['seconds'] for r in reports],
                       'reference_seconds': {m: reports[0]['runs'][m]['seconds'] for m in bench.MODES[1:]},
                       'base_stability': stability, 'missing': [r['missing'] for r in reports],
@@ -105,6 +113,15 @@ def summarize(output, targets, rounds):
         cov = ', '.join(f'{c:.2%}' if c is not None else 'n/a' for c in s['coverage'])
         lines.append(f"| {s['site']} | {statistics.mean(s['base_seconds']):.2f} | {s['reference_seconds']['katana-static']:.2f} | {s['reference_seconds']['katana-browser']:.2f} | {cov} | {s['base_stability']:.3f} | {s['passed']} |")
     lines += ['', f"正式通过 {result['passed_sites']}/{len(sites)}；总体目标达成：{result['goal_met']}。", '', result['reference_policy'], *result['limitations']]
+    lines += ['', '## Discovery and execution metrics (separate from strict acceptance)', '',
+              '| Site | Round | Discovered method/URL | Observed successful method/URL | Dispatch attempts | Analysis failures | Unvisited | Seconds |',
+              '|---|---:|---:|---:|---:|---:|---:|---:|']
+    for s in sites:
+        for n, metric in enumerate(s['metrics'], 1):
+            m = metric['modes']['basecrawler']
+            lines.append(f"| {s['site']} | {n} | {m['discovered_method_urls']} | {m['observed_successful_method_urls']} | {m['requests_attempted']} | {m['analysis_failures']} | {m['unvisited']} | {m['seconds']:.2f} |")
+    lines += ['', 'Katana network totals and JavaScript analysis failures are unknown, not zero. See each site metrics.json for separate static/browser reference coverage.',
+              'RSC verification replays observed protocol headers; ordinary HTML GET cannot certify a Flight response. Cache-token aliases require matching context and response hashes.']
     (output / 'summary.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
     return result
 
@@ -117,6 +134,7 @@ def run(args):
         raise ValueError('Targets absent from frozen reference or registry: ' + ', '.join(sorted(unknown)))
     targets = [bench.common.TARGETS[s] for s in target_ids]
     config = {'reference': str(args.reference.resolve()), 'reference_sha256': digest(args.reference / 'frozen.json'),
+              'scoring_sha256':scoring_fingerprint(),
               'base': str(args.base.resolve()), 'base_sha256': digest(args.base), 'targets': target_ids, 'rounds': args.rounds}
     if (args.output / 'config.json').exists():
         if not args.resume or read(args.output / 'config.json') != config:
@@ -150,9 +168,11 @@ def compare_saved(args):
     sites = {}
     for source in args.source:
         for folder in sorted(source.glob('round-*/*')):
+            if getattr(args,'targets','') and folder.name not in args.targets.split(','):
+                continue
             if folder.name in manifest['sites'] and (folder / 'basecrawler/run.json').exists():
                 sites.setdefault(folder.name, []).append(folder)
-    bench.write_json(args.output / 'config.json', {'reference': str(args.reference.resolve()), 'saved_sources': [str(p.resolve()) for p in args.source]})
+    bench.write_json(args.output / 'config.json', {'reference': str(args.reference.resolve()), 'saved_sources': [str(p.resolve()) for p in args.source], 'scoring_sha256':scoring_fingerprint()})
     for site, folders in sites.items():
         for n, folder in enumerate(folders, 1):
             output = args.output / f'round-{n:02}' / site
@@ -178,6 +198,7 @@ if __name__ == '__main__':
     c = sub.add_parser('compare-saved'); c.add_argument('--reference', type=Path, required=True)
     c.add_argument('--source', type=Path, action='append', required=True); c.add_argument('--output', type=Path, required=True)
     c.add_argument('--resume', action='store_true')
+    c.add_argument('--targets', default='', help='limit saved-run re-scoring without executing crawlers')
     args = parser.parse_args()
     if args.action == 'freeze': freeze(args.source, args.output)
     elif args.action == 'compare-saved': compare_saved(args)

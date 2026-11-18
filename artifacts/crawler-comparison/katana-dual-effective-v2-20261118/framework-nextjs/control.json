@@ -1,0 +1,13 @@
+{
+  "url": "https://nextjs.org/__crawler_benchmark_missing_20261118__",
+  "final_url": "https://nextjs.org/__crawler_benchmark_missing_20261118__",
+  "status": 404,
+  "content_type": "text/html; charset=utf-8",
+  "bytes": 115172,
+  "truncated": false,
+  "sha256": "bc1b8c8f821e50a5e2f26948e16dd60fd3f9db245d2503dcb34dacb094839b6f",
+  "canonical": "",
+  "title": "Page not found",
+  "seconds": 0.7554815999901621,
+  "error": ""
+}

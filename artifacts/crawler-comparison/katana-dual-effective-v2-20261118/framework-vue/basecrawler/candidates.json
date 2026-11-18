@@ -1,0 +1,1990 @@
+[
+  {
+    "url": "https://vuejs.org/guide/introduction.html",
+    "method": "GET",
+    "source": "js-ast:treesitter",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/app.D0mWAWmO.js",
+    "method": "GET",
+    "source": "script",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/chunks/PreferenceSwitch.cOhUquTJ.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/chunks/SponsorsGroup.BhvZwuv-.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/chunks/client.qwjY1U4s.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/EXPR",
+    "method": "GET",
+    "source": "js-ast:treesitter",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/about/coc",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/chunks/plugin-vue_export-helper.CHIaqsk5.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/chunks/preload-helper.DPeZQNDl.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/chunks/runtime-core.esm-bundler.mWVJHdgS.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/chunks/runtime-dom.esm-bundler.nSXvOlaI.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/sfc-script-setup",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/chunks/src.BtOXUfsh.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_introduction.md.gZJIji1q.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/ecosystem/newsletters",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/best-practices/accessibility",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/about/community-guide",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/ecosystem/themes",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/best-practices/performance",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/about/faq",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/best-practices/production-deployment",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/about/privacy",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/best-practices/security",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/about/releases",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/built-ins/keep-alive",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/about/team",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/built-ins/suspense",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/built-ins/teleport",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/built-ins/transition",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/built-ins/transition-group",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/components/async",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/components/attrs",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/components/events",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/components/props",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/components/provide-inject",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/components/registration",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/components/slots",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/components/v-model",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/essentials/application",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/essentials/class-and-style",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/essentials/component-basics",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/essentials/computed",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/essentials/conditional",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/essentials/event-handling",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/essentials/forms",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/essentials/lifecycle",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/essentials/list",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/essentials/reactivity-fundamentals",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/extras/animation",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/extras/composition-api-faq",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/extras/reactivity-in-depth",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/extras/render-function",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/extras/rendering-mechanism",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/extras/ways-of-using-vue",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/extras/web-components",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/introduction",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/quick-start",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/reusability/composables",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/reusability/custom-directives",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/reusability/plugins",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/scaling-up/routing",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/scaling-up/sfc",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/scaling-up/ssr",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/scaling-up/testing",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/scaling-up/tooling",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/typescript/composition-api",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/typescript/options-api",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/typescript/overview",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/about/coc.html",
+    "method": "GET",
+    "source": "sitemap",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/about/community-guide.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/about/faq.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/about/privacy.html",
+    "method": "GET",
+    "source": "sitemap",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/about/releases.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/about/team.html",
+    "method": "GET",
+    "source": "sitemap",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/application.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/built-in-components.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/built-in-directives.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/built-in-special-attributes.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/built-in-special-elements.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/compile-time-flags.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/component-instance.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/composition-api-dependency-injection.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/composition-api-helpers.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/composition-api-lifecycle.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/composition-api-setup.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/custom-elements.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/custom-renderer.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/general.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/options-composition.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/options-lifecycle.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/options-misc.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/options-rendering.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/options-state.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/reactivity-advanced.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/reactivity-core.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/reactivity-utilities.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/render-function.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/sfc-css-features.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/sfc-script-setup.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/sfc-spec.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/ssr.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/utility-types.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/ecosystem/newsletters.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/ecosystem/themes.html",
+    "method": "GET",
+    "source": "sitemap",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/error-reference/",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/examples/",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/glossary/",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/best-practices/accessibility.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/best-practices/performance.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/best-practices/production-deployment.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/best-practices/security.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/built-ins/keep-alive.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/built-ins/suspense.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/built-ins/teleport.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/built-ins/transition-group.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/built-ins/transition.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/components/async.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/components/attrs.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/components/events.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/components/props.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/components/provide-inject.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/components/registration.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/components/slots.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/components/v-model.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/essentials/application.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/essentials/class-and-style.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/essentials/component-basics.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/essentials/computed.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/essentials/conditional.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/essentials/event-handling.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/essentials/forms.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/essentials/lifecycle.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/essentials/list.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/essentials/reactivity-fundamentals.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/essentials/template-refs.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/essentials/template-syntax.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/essentials/watchers.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/extras/animation.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/extras/composition-api-faq.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/extras/reactivity-in-depth.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/extras/reactivity-transform.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/extras/render-function.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/extras/rendering-mechanism.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/extras/ways-of-using-vue.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/extras/web-components.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/quick-start.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/reusability/composables.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/reusability/custom-directives.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/reusability/plugins.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/scaling-up/routing.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/scaling-up/sfc.html",
+    "method": "GET",
+    "source": "js-ast:treesitter",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/scaling-up/ssr.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/scaling-up/state-management.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/scaling-up/testing.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/scaling-up/tooling.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/typescript/composition-api.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/typescript/options-api.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/typescript/overview.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/partners/all.html",
+    "method": "GET",
+    "source": "sitemap",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/partners/curotec.html",
+    "method": "GET",
+    "source": "sitemap",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/partners/herodevs.html",
+    "method": "GET",
+    "source": "sitemap",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/partners/",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/partners/monterail.html",
+    "method": "GET",
+    "source": "sitemap",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/partners/proxify.html",
+    "method": "GET",
+    "source": "sitemap",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/partners/redberry.html",
+    "method": "GET",
+    "source": "sitemap",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/partners/vehikl.html",
+    "method": "GET",
+    "source": "sitemap",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/partners/webreinvent.html",
+    "method": "GET",
+    "source": "sitemap",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/sponsor/",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/style-guide/",
+    "method": "GET",
+    "source": "sitemap",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/style-guide/rules-essential.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/style-guide/rules-recommended.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/style-guide/rules-strongly-recommended.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/style-guide/rules-use-with-caution.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/translations/",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/tutorial/",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/style-guide.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/glossary.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/error-reference.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/translations.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/tutorial.html",
+    "method": "GET",
+    "source": "llms.txt",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/style.Dx8eLWZJ.css",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/vp-icons.css",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/essentials/template-syntax",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/essentials/watchers",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/essentials/template-refs",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/scaling-up/state-management",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/chunks/tutorial/",
+    "method": "GET",
+    "source": "js-ast:treesitter",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/chunks/_index.md",
+    "method": "GET",
+    "source": "js-ast:treesitter",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/chunks/EXPRhashmap.json",
+    "method": "GET",
+    "source": "js-ast:treesitter",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/chunks/EXPR.md",
+    "method": "GET",
+    "source": "js-ast:treesitter",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/chunks/EXPR_index.md",
+    "method": "GET",
+    "source": "js-ast:treesitter",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/about_coc.md.DhLxNS9q.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/api_sfc-script-setup.md.CH_6TAuN.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/application",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/general",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/composition-api-setup",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/reactivity-core",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/reactivity-utilities",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/reactivity-advanced",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/composition-api-lifecycle",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/composition-api-dependency-injection",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/composition-api-helpers",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/options-state",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/options-rendering",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/options-lifecycle",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/options-composition",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/options-misc",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/component-instance",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/built-in-directives",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/built-in-components",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/built-in-special-elements",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/built-in-special-attributes",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/sfc-spec",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/sfc-css-features",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/custom-elements",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/render-function",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/ssr",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/utility-types",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/custom-renderer",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/api/compile-time-flags",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/chunks/VPAlgoliaSearchBox.CXIvBPIA.js",
+    "method": "GET",
+    "source": "js-ast:treesitter",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/chunks/config.CudeF2Mg.js",
+    "method": "GET",
+    "source": "js-ast:treesitter",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/ecosystem_newsletters.md.BJVBzyxJ.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_best-practices_accessibility.md.B9c1DOyw.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/about_community-guide.md.BjuNCv5B.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/ecosystem_themes.md.CLUwaPU1.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_best-practices_performance.md.60ndxssi.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/about_faq.md.BhekHSKG.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_best-practices_production-deployment.md.CwrTM74z.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/about_privacy.md.B0Nt_L9y.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_best-practices_security.md.PmOCPkwz.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/about_releases.md.36kooOtZ.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_built-ins_keep-alive.md.D3dG265n.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/about_team.md.DgwUA4q5.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_built-ins_suspense.md.BpSdjabj.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_built-ins_teleport.md.B1qpnWKR.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/chunks/gsap.BZPk19ee.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_built-ins_transition.md.CG20oJsi.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_built-ins_transition-group.md.DVn8HeNH.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_components_async.md.ChQg5AYg.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_components_attrs.md.BDKG6pc8.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_components_events.md.DgEbDxSC.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_components_props.md.CFTnR38y.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_components_provide-inject.md.Ynmu5Gis.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_components_registration.md.BzlqHTYl.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_components_slots.md.CigvlrzQ.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_components_v-model.md.Cb0vjw1R.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_essentials_application.md.BPiD8eBJ.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_essentials_class-and-style.md.CSSp3abw.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_essentials_component-basics.md.DrnM0P_h.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_essentials_computed.md.C5iLu6gh.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_essentials_conditional.md.C0O2DuJt.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_essentials_event-handling.md.C4wAE0hL.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_essentials_forms.md.DwINnTjG.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_essentials_lifecycle.md.D20uIKLV.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_essentials_list.md.7OP4GSsC.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_essentials_reactivity-fundamentals.md.DZcvDwPP.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_essentials_template-refs.md.BIxjXaYN.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_essentials_template-syntax.md.D-9k4Vss.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_essentials_watchers.md.B4fmzDbZ.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/chunks/chunk.OkDFcUvs.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_extras_animation.md.B3-IiWwp.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_extras_composition-api-faq.md.6Oj_uOLa.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_extras_reactivity-in-depth.md.BRS1KzHW.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/guide/extras/reactivity-transform",
+    "method": "GET",
+    "source": "a",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_extras_render-function.md.DkRII991.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_extras_rendering-mechanism.md.Baz0J3q9.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_extras_ways-of-using-vue.md.CfV3l946.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_extras_web-components.md.S0zivv_A.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_quick-start.md.azpPUwPP.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_reusability_composables.md.C0qFrgcE.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_reusability_custom-directives.md.CS3TcgZv.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_reusability_plugins.md.Bs2ZH7wP.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_scaling-up_routing.md.zkGjbDwq.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_scaling-up_sfc.md.EpnyKuQJ.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_scaling-up_ssr.md.DaqmTb_m.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_scaling-up_testing.md.CoWTnCdH.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_scaling-up_tooling.md.CiZDUdoP.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_typescript_composition-api.md.CAHjrV49.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_typescript_options-api.md.BfLq4ooL.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://vuejs.org/assets/guide_typescript_overview.md.C6NlxZpy.lean.js",
+    "method": "GET",
+    "source": "link",
+    "params": [],
+    "json_body_params": []
+  }
+]

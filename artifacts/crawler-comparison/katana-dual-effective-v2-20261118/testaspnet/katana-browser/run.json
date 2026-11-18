@@ -1,0 +1,11 @@
+{
+  "site": "testaspnet",
+  "mode": "katana-browser",
+  "status": "empty_unverified",
+  "exit_code": 0,
+  "seconds": 7.13275469999644,
+  "candidates": 0,
+  "binary_sha256": "5652587c618f576d264b4654864987433a1a11400febc32b1998e7e906f9dd79",
+  "request_errors": 0,
+  "boundary_discoveries": 0
+}

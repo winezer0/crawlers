@@ -1,0 +1,43 @@
+{
+  "command": [
+    "C:\\ISEC\\Deving\\crawlers\\basecrawler\\bin\\basecrawler.exe",
+    "-u",
+    "https://vuejs.org/guide/introduction.html",
+    "-d",
+    "2",
+    "-c",
+    "1",
+    "--max-urls",
+    "80",
+    "--timeout",
+    "15",
+    "--max-body",
+    "16777216",
+    "--scope",
+    "fqdn",
+    "--rl",
+    "2",
+    "--ct",
+    "60s",
+    "--no-fuzz",
+    "--no-testfill",
+    "--no-probe-openapi",
+    "--fsu",
+    "-s",
+    "all",
+    "--stable-host-order",
+    "--discoveries",
+    "C:\\ISEC\\Deving\\crawlers\\artifacts\\crawler-comparison\\katana-dual-effective-v2-20261118\\framework-vue\\basecrawler\\discoveries.jsonl",
+    "--report",
+    "C:\\ISEC\\Deving\\crawlers\\artifacts\\crawler-comparison\\katana-dual-effective-v2-20261118\\framework-vue\\basecrawler\\report.json",
+    "-o",
+    "C:\\ISEC\\Deving\\crawlers\\artifacts\\crawler-comparison\\katana-dual-effective-v2-20261118\\framework-vue\\basecrawler\\results.jsonl",
+    "--strategy",
+    "breadth-first"
+  ],
+  "seed": "https://vuejs.org/guide/introduction.html",
+  "scope": [
+    "vuejs.org"
+  ],
+  "started_at": "2026-11-18T17:02:11+0800"
+}

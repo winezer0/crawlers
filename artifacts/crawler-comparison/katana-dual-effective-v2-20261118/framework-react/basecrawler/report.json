@@ -1,0 +1,19 @@
+{
+  "completion": {
+    "status": "limited",
+    "complete": false,
+    "requests_attempted": 80,
+    "reasons": [
+      {
+        "code": "url_limit",
+        "count": 2
+      }
+    ]
+  },
+  "elapsed_seconds": 40.7416004,
+  "diagnostics": {
+    "crawl_seconds": 40.7371016,
+    "generate_seconds": 0.0020004,
+    "send_seconds": 0
+  }
+}

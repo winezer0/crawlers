@@ -1,0 +1,499 @@
+[
+  {
+    "url": "https://nextjs.org/",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/learn",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/showcase",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/blog",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/app/getting-started",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/app/getting-started/installation",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/app/getting-started/project-structure",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/app/getting-started/layouts-and-pages",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/app/getting-started/linking-and-navigating",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/app/getting-started/server-and-client-components",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/app/getting-started/fetching-data",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/app/getting-started/mutating-data",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/app/getting-started/caching",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/app/getting-started/revalidating",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/app/getting-started/error-handling",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/app/getting-started/css",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/app/guides",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/app/api-reference",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/app/glossary",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/architecture",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/architecture/accessibility",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/architecture/fast-refresh",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/architecture/nextjs-compiler",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/architecture/supported-browsers",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/community",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/community/contribution-guide",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/community/rspack",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/app",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/pages",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/learn/react-foundations",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/learn/dashboard-app",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/support-policy",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/team",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/conf",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/evals",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/telemetry",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/governance",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/_next/static/immutable/chunks/2_v7l_xwhu8id.css",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/_next/static/immutable/chunks/2nzwsyggabkvc.css",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/_next/static/immutable/chunks/2lra4q96-7lip.css",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/_next/static/immutable/chunks/0_i5s4t6zr97r.js",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/_next/static/immutable/chunks/1ahat5m8pd13v.js",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/_next/static/immutable/chunks/3xraaddz567c6.js",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/_next/static/immutable/chunks/13zyk--wn5vxz.js",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/_next/static/immutable/chunks/turbopack-2cxt_o3113dgu.js",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/_next/static/immutable/chunks/3mhshttdeejne.js",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/_next/static/immutable/chunks/430_0k8htd8id.js",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/_next/static/immutable/chunks/3qufw4l3n33nl.js",
+    "method": "GET",
+    "source": "https://nextjs.org/docs",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs",
+    "method": "GET",
+    "source": "",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/showcase?_rsc=c-Hr4oP2d3Bq2q0W",
+    "method": "GET",
+    "source": "",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/?_rsc=c-Hr4oP2d3Bq2q0W",
+    "method": "GET",
+    "source": "",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/api/get-session",
+    "method": "GET",
+    "source": "",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/api/show-consent-banner",
+    "method": "GET",
+    "source": "",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/e25c61660ad7a6b3/script.js",
+    "method": "GET",
+    "source": "",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/app/getting-started?_rsc=c-Hr4oP2d3Bq2q0W",
+    "method": "GET",
+    "source": "",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/app/getting-started/installation?_rsc=c-Hr4oP2d3Bq2q0W",
+    "method": "GET",
+    "source": "",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/app/getting-started/layouts-and-pages?_rsc=c-Hr4oP2d3Bq2q0W",
+    "method": "GET",
+    "source": "",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/app/getting-started/project-structure?_rsc=c-Hr4oP2d3Bq2q0W",
+    "method": "GET",
+    "source": "",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/app/api-reference?_rsc=c-Hr4oP2d3Bq2q0W",
+    "method": "GET",
+    "source": "",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/api/stream/internal",
+    "method": "POST",
+    "source": "",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/app/getting-started/linking-and-navigating?_rsc=j5FejdATWZgJBpIR",
+    "method": "GET",
+    "source": "",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/app/getting-started/server-and-client-components?_rsc=j5FejdATWZgJBpIR",
+    "method": "GET",
+    "source": "",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/app/getting-started/fetching-data?_rsc=j5FejdATWZgJBpIR",
+    "method": "GET",
+    "source": "",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/app/getting-started/mutating-data?_rsc=j5FejdATWZgJBpIR",
+    "method": "GET",
+    "source": "",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/app/getting-started/caching?_rsc=j5FejdATWZgJBpIR",
+    "method": "GET",
+    "source": "",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/app/getting-started/revalidating?_rsc=j5FejdATWZgJBpIR",
+    "method": "GET",
+    "source": "",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/app/getting-started/error-handling?_rsc=j5FejdATWZgJBpIR",
+    "method": "GET",
+    "source": "",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/app/getting-started/%5C%22...%5C%22",
+    "method": "GET",
+    "source": "https://nextjs.org/docs/app/getting-started/css?_rsc=j5FejdATWZgJBpIR",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/app/getting-started/css?_rsc=j5FejdATWZgJBpIR",
+    "method": "GET",
+    "source": "",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/app/guides?_rsc=j5FejdATWZgJBpIR",
+    "method": "GET",
+    "source": "",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "https://nextjs.org/docs/architecture?_rsc=qQqumFMp2jGIxygu",
+    "method": "GET",
+    "source": "",
+    "params": [],
+    "json_body_params": []
+  }
+]

@@ -1,0 +1,27 @@
+{
+  "completion": {
+    "status": "timed_out",
+    "complete": false,
+    "requests_attempted": 61,
+    "reasons": [
+      {
+        "code": "analysis_failure",
+        "count": 1
+      },
+      {
+        "code": "request_failure",
+        "count": 1
+      },
+      {
+        "code": "timeout",
+        "count": 1
+      }
+    ]
+  },
+  "elapsed_seconds": 60.0034483,
+  "diagnostics": {
+    "crawl_seconds": 60.0014512,
+    "generate_seconds": 0,
+    "send_seconds": 0
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "site": "framework-react",
+  "reference_candidates": 223,
+  "verified_valid_reference": 219,
+  "covered": 219,
+  "coverage": 1.0,
+  "missing": [],
+  "unresolved": [],
+  "verification_classes": {
+    "valid_page": 203,
+    "other_content": 143,
+    "valid_json": 18,
+    "unconfirmed": 1,
+    "not_found": 2
+  },
+  "runs": {
+    "basecrawler": {
+      "site": "framework-react",
+      "mode": "basecrawler",
+      "status": "completed",
+      "exit_code": 0,
+      "seconds": 41.03695460000017,
+      "candidates": 429,
+      "binary_sha256": "df976f26dc4bba64009d02ada37187a9fec907471f46d31d9e951b82a1e55569",
+      "request_errors": 0
+    },
+    "katana-static": {
+      "site": "framework-react",
+      "mode": "katana-static",
+      "status": "completed",
+      "exit_code": 0,
+      "seconds": 51.14284800000314,
+      "candidates": 235,
+      "request_errors": 0,
+      "boundary_discoveries": 3054
+    },
+    "katana-browser": {
+      "site": "framework-react",
+      "mode": "katana-browser",
+      "status": "completed",
+      "exit_code": 0,
+      "seconds": 60.694833399989875,
+      "candidates": 63,
+      "request_errors": 0,
+      "boundary_discoveries": 0
+    }
+  },
+  "passed": true,
+  "note": "HTTP-confirmed GET page/JSON coverage only; methods, templates and business semantics are not certified."
+}

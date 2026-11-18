@@ -1,0 +1,19 @@
+{
+  "completion": {
+    "status": "limited",
+    "complete": false,
+    "requests_attempted": 71,
+    "reasons": [
+      {
+        "code": "depth_boundary",
+        "count": 60
+      }
+    ]
+  },
+  "elapsed_seconds": 37.956916,
+  "diagnostics": {
+    "crawl_seconds": 37.9549187,
+    "generate_seconds": 0,
+    "send_seconds": 0
+  }
+}

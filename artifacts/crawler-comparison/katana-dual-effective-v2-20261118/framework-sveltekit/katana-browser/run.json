@@ -1,0 +1,10 @@
+{
+  "site": "framework-sveltekit",
+  "mode": "katana-browser",
+  "status": "completed",
+  "exit_code": 0,
+  "seconds": 62.70226980000734,
+  "candidates": 69,
+  "request_errors": 0,
+  "boundary_discoveries": 0
+}

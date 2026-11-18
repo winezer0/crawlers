@@ -1,0 +1,107 @@
+[
+  {
+    "url": "http://testaspnet.vulnweb.com/",
+    "method": "GET",
+    "source": "http://testaspnet.vulnweb.com/Comments.aspx?id=0",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "http://testaspnet.vulnweb.com/styles.css",
+    "method": "GET",
+    "source": "http://testaspnet.vulnweb.com/ReadNews.aspx?id=0",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "http://testaspnet.vulnweb.com/ReadNews.aspx?id=0&NewsAd=ads/def.html",
+    "method": "GET",
+    "source": "http://testaspnet.vulnweb.com",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "http://testaspnet.vulnweb.com/Comments.aspx?id=0",
+    "method": "GET",
+    "source": "http://testaspnet.vulnweb.com/ReadNews.aspx?id=0",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "http://testaspnet.vulnweb.com/rssFeed.aspx",
+    "method": "GET",
+    "source": "http://testaspnet.vulnweb.com/ReadNews.aspx?id=0",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "http://testaspnet.vulnweb.com/ads/def.html",
+    "method": "GET",
+    "source": "http://testaspnet.vulnweb.com/ReadNews.aspx?id=0&NewsAd=ads/def.html",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "http://testaspnet.vulnweb.com/about.aspx",
+    "method": "GET",
+    "source": "http://testaspnet.vulnweb.com/",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "http://testaspnet.vulnweb.com/default.aspx",
+    "method": "GET",
+    "source": "http://testaspnet.vulnweb.com/",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "http://testaspnet.vulnweb.com/login.aspx",
+    "method": "GET",
+    "source": "http://testaspnet.vulnweb.com/",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "http://testaspnet.vulnweb.com/Signup.aspx",
+    "method": "GET",
+    "source": "http://testaspnet.vulnweb.com/",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "http://testaspnet.vulnweb.com/Comments.aspx?id=3",
+    "method": "GET",
+    "source": "http://testaspnet.vulnweb.com",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "http://testaspnet.vulnweb.com/ReadNews.aspx?id=3&NewsAd=ads/def.html",
+    "method": "GET",
+    "source": "http://testaspnet.vulnweb.com",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "http://testaspnet.vulnweb.com/Comments.aspx?id=2",
+    "method": "GET",
+    "source": "http://testaspnet.vulnweb.com",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "http://testaspnet.vulnweb.com/ReadNews.aspx?id=2&NewsAd=ads/def.html",
+    "method": "GET",
+    "source": "http://testaspnet.vulnweb.com",
+    "params": [],
+    "json_body_params": []
+  },
+  {
+    "url": "http://testaspnet.vulnweb.com/ReadNews.aspx?id=0",
+    "method": "GET",
+    "source": "http://testaspnet.vulnweb.com/Comments.aspx?id=0",
+    "params": [],
+    "json_body_params": []
+  }
+]

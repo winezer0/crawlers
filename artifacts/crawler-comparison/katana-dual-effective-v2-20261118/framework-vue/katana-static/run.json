@@ -1,0 +1,10 @@
+{
+  "site": "framework-vue",
+  "mode": "katana-static",
+  "status": "completed",
+  "exit_code": 0,
+  "seconds": 60.56821920000948,
+  "candidates": 99,
+  "request_errors": 0,
+  "boundary_discoveries": 1278
+}

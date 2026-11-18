@@ -1,0 +1,10 @@
+{
+  "site": "framework-react",
+  "mode": "katana-browser",
+  "status": "completed",
+  "exit_code": 0,
+  "seconds": 60.694833399989875,
+  "candidates": 63,
+  "request_errors": 0,
+  "boundary_discoveries": 0
+}

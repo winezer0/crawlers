@@ -1,0 +1,11 @@
+{
+  "site": "framework-nextjs",
+  "mode": "katana-static",
+  "status": "completed",
+  "exit_code": 0,
+  "seconds": 60.46975899999961,
+  "candidates": 358,
+  "binary_sha256": "5652587c618f576d264b4654864987433a1a11400febc32b1998e7e906f9dd79",
+  "request_errors": 0,
+  "boundary_discoveries": 2272
+}

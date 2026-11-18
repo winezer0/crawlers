@@ -1,0 +1,17 @@
+{
+  "action": "run",
+  "output": "C:\\ISEC\\Deving\\crawlers\\artifacts\\crawler-comparison\\katana-dual-effective-v2-20261118",
+  "targets": "testasp,testaspnet,framework-vue,framework-react,framework-angular,framework-nextjs,framework-sveltekit",
+  "base": "C:\\ISEC\\Deving\\crawlers\\basecrawler\\bin\\basecrawler.exe",
+  "chrome": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+  "depth": 2,
+  "strategy": "breadth-first",
+  "pages": 80,
+  "seconds": 60,
+  "rate": 2,
+  "proxy": "",
+  "workers": 3,
+  "verify_limit": 0,
+  "verify_timeout": 12,
+  "resume": true
+}

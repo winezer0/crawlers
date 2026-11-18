@@ -1,0 +1,10 @@
+{
+  "site": "framework-nextjs",
+  "mode": "basecrawler",
+  "status": "completed",
+  "exit_code": 0,
+  "seconds": 43.704956200002925,
+  "candidates": 1875,
+  "binary_sha256": "df976f26dc4bba64009d02ada37187a9fec907471f46d31d9e951b82a1e55569",
+  "request_errors": 0
+}

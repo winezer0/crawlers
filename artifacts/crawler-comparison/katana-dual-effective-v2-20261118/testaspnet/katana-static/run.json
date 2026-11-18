@@ -1,0 +1,10 @@
+{
+  "site": "testaspnet",
+  "mode": "katana-static",
+  "status": "completed",
+  "exit_code": 0,
+  "seconds": 23.194407899994985,
+  "candidates": 15,
+  "request_errors": 0,
+  "boundary_discoveries": 36
+}

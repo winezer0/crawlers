@@ -1,0 +1,23 @@
+{
+  "completion": {
+    "status": "partial_failure",
+    "complete": false,
+    "requests_attempted": 80,
+    "reasons": [
+      {
+        "code": "analysis_failure",
+        "count": 2
+      },
+      {
+        "code": "url_limit",
+        "count": 2
+      }
+    ]
+  },
+  "elapsed_seconds": 48.7246301,
+  "diagnostics": {
+    "crawl_seconds": 48.7226328,
+    "generate_seconds": 0,
+    "send_seconds": 0
+  }
+}

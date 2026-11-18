@@ -1,0 +1,48 @@
+{
+  "site": "testaspnet",
+  "reference_candidates": 14,
+  "verified_valid_reference": 13,
+  "covered": 13,
+  "coverage": 1.0,
+  "missing": [],
+  "unresolved": [],
+  "verification_classes": {
+    "valid_page": 15,
+    "other_content": 1
+  },
+  "runs": {
+    "basecrawler": {
+      "site": "testaspnet",
+      "mode": "basecrawler",
+      "status": "completed",
+      "exit_code": 0,
+      "seconds": 10.121115199988708,
+      "candidates": 31,
+      "binary_sha256": "df976f26dc4bba64009d02ada37187a9fec907471f46d31d9e951b82a1e55569",
+      "request_errors": 0
+    },
+    "katana-static": {
+      "site": "testaspnet",
+      "mode": "katana-static",
+      "status": "completed",
+      "exit_code": 0,
+      "seconds": 23.194407899994985,
+      "candidates": 15,
+      "request_errors": 0,
+      "boundary_discoveries": 36
+    },
+    "katana-browser": {
+      "site": "testaspnet",
+      "mode": "katana-browser",
+      "status": "empty_unverified",
+      "exit_code": 0,
+      "seconds": 7.13275469999644,
+      "candidates": 0,
+      "binary_sha256": "5652587c618f576d264b4654864987433a1a11400febc32b1998e7e906f9dd79",
+      "request_errors": 0,
+      "boundary_discoveries": 0
+    }
+  },
+  "passed": false,
+  "note": "HTTP-confirmed GET page/JSON coverage only; methods, templates and business semantics are not certified."
+}

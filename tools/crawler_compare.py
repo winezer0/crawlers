@@ -339,6 +339,7 @@ def build_command(
     chrome: Path | None = None,
     brow_config: Path | None = None,
     allow_form_submit: bool = False,
+    brow_interactions: int = 0,
 ) -> tuple[list[str] | None, Path, str | None]:
     tool = TOOLS[name]
     binary = resolve_tool_binary(name)
@@ -386,14 +387,18 @@ def build_command(
         config = run_dir / "browcrawler-config.yaml"
         config.write_text(config_text, encoding="utf-8")
         discovered = run_dir / "discovered.jsonl"
+        traffic = run_dir / "traffic.jsonl"
+        report = run_dir / "crawl-report.json"
+        metrics = run_dir / "metrics.jsonl"
         command = prefix + [
             "--config", str(config), "--url", target.seed,
             "--scope-mode", "fqdn", "--depth", str(target.depth),
             "--max-pages", str(target.max_pages), "--host-rate", str(target.host_rate),
             "--basecrawler-max-urls", str(browcrawler_static_budget(target)),
-            "--interactions", "0", "--no-forms",
+            "--interactions", str(brow_interactions), "--no-forms",
             "--backend", "obscura", "--concurrency", "1",
-            "--discovered", str(discovered),
+            "--out", str(traffic), "--discovered", str(discovered),
+            "--report", str(report), "--metrics", str(metrics),
         ]
         if not target.disable_bootstrap:
             command.append("--obey-robots")
@@ -697,6 +702,10 @@ def make_parser() -> argparse.ArgumentParser:
         command.add_argument("--chrome", type=Path, help="Chrome/Edge 可执行文件路径")
         command.add_argument("--allow-form-submit", action="store_true", help="允许运行会自动填充并提交表单的 crawlergo（仅限授权测试实例）")
         command.add_argument("--pause", type=float, default=1.0, help="同一目标下工具运行之间的等待秒数")
+        command.add_argument(
+            "--brow-interactions", type=int, default=0,
+            help="Browcrawler 最大只读控件点击数；表单仍保持关闭，默认 0",
+        )
         if action == "run":
             command.add_argument("--process-timeout", type=int, default=600, help="每个工具进程的硬超时秒数")
     return parser
@@ -749,6 +758,7 @@ def run_one(
     chrome: Path | None,
     brow_config: Path | None,
     allow_form_submit: bool,
+    brow_interactions: int,
     process_timeout: int,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     tool = TOOLS[name]
@@ -756,7 +766,7 @@ def run_one(
     stdout_path, stderr_path = run_dir / "stdout.txt", run_dir / "stderr.txt"
     command, cwd, issue = build_command(
         name, target, run_dir, chrome=chrome, brow_config=brow_config,
-        allow_form_submit=allow_form_submit,
+        allow_form_submit=allow_form_submit, brow_interactions=brow_interactions,
     )
     version = get_version(name)
     status, exit_code, error, stdout, stderr = "completed", None, "", "", ""
@@ -1191,9 +1201,24 @@ def self_test() -> int:
         brow_command, _, error = build_command("browcrawler", unbounded, temp_path)
         assert error is None and brow_command is not None
         assert "--obey-robots" not in brow_command
+        assert brow_command[brow_command.index("--interactions") + 1] == "0"
+        assert "--no-forms" in brow_command
         brow_config_text = (temp_path / "browcrawler-config.yaml").read_text(encoding="utf-8")
         assert "max_body_size: 16777216" in brow_config_text
         assert 'upstream_proxy: "socks5://127.0.0.1:10808"' in brow_config_text
+        interactive_brow_command, _, error = build_command(
+            "browcrawler", custom, temp_path, brow_interactions=10
+        )
+        assert error is None and interactive_brow_command is not None
+        assert interactive_brow_command[interactive_brow_command.index("--interactions") + 1] == "10"
+        assert "--no-forms" in interactive_brow_command
+        assert "--obey-robots" in interactive_brow_command
+        for flag, filename in (
+            ("--out", "traffic.jsonl"),
+            ("--report", "crawl-report.json"),
+            ("--metrics", "metrics.jsonl"),
+        ):
+            assert interactive_brow_command[interactive_brow_command.index(flag) + 1] == str(temp_path / filename)
         crawlergo_command, _, error = build_command(
             "crawlergo", unbounded, temp_path, chrome=Path("chrome.exe"), allow_form_submit=True
         )
@@ -1251,6 +1276,8 @@ def main(argv: list[str] | None = None) -> int:
         tool_names = selected(args.tools, TOOLS, "tools")
         if args.rounds < 1:
             raise ValueError("--rounds must be at least 1")
+        if args.brow_interactions < 0:
+            raise ValueError("--brow-interactions cannot be negative")
         targets = [target_map[name] for name in target_ids]
     except (ValueError, OSError, json.JSONDecodeError) as exc:
         parser.error(str(exc))
@@ -1278,6 +1305,7 @@ def main(argv: list[str] | None = None) -> int:
         "rounds": args.rounds,
         "chrome": str(chrome) if chrome else None,
         "form_submit_allowed": args.allow_form_submit,
+        "browcrawler_interactions": args.brow_interactions,
     }
     (output_dir / "metadata.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
     run_rows: list[dict[str, Any]] = []
@@ -1294,6 +1322,7 @@ def main(argv: list[str] | None = None) -> int:
                     name, target, round_number, run_dir,
                     chrome=chrome, brow_config=brow_config,
                     allow_form_submit=args.allow_form_submit,
+                    brow_interactions=args.brow_interactions,
                     process_timeout=args.process_timeout,
                 )
                 run_rows.append(row)

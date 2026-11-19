@@ -561,6 +561,115 @@ def collect_result_and_discovery_counts(run_dir: Path, stdout: str, stderr: str)
     return len(result_urls), len(discovery_urls)
 
 
+def format_completion_reasons(reasons: Any) -> str:
+    if not isinstance(reasons, list):
+        return ""
+    formatted: list[str] = []
+    for item in reasons:
+        if isinstance(item, dict):
+            code, count = item.get("code"), item.get("count")
+            if code:
+                formatted.append(f"{code}:{count}" if count is not None else str(code))
+    return ";".join(sorted(formatted))
+
+
+def completion_fields(record: Any) -> dict[str, Any] | None:
+    if not isinstance(record, dict) or not record.get("status"):
+        return None
+    complete = record.get("complete")
+    if not isinstance(complete, bool):
+        complete = None
+    return {
+        "crawl_status": str(record["status"]),
+        "crawl_complete": complete,
+        "completion_reasons": format_completion_reasons(record.get("reasons")),
+    }
+
+
+def parse_completion_log(output: str) -> dict[str, Any] | None:
+    matches = list(re.finditer(
+        r"\[completion\]\s+([a-z_]+)\s+complete=(true|false)\s+reasons=\[(.*?)\]",
+        output, flags=re.IGNORECASE,
+    ))
+    if not matches:
+        return None
+    match = matches[-1]
+    reasons = [
+        {"code": code, "count": int(count)}
+        for code, count in re.findall(r"\{([A-Za-z0-9_]+)\s+(\d+)\}", match.group(3))
+    ]
+    return {
+        "crawl_status": match.group(1).lower(),
+        "crawl_complete": match.group(2).lower() == "true",
+        "completion_reasons": format_completion_reasons(reasons),
+    }
+
+
+def parse_go_duration(value: str) -> float | None:
+    units = {"ns": 1e-9, "us": 1e-6, "µs": 1e-6, "μs": 1e-6, "ms": 1e-3, "s": 1, "m": 60, "h": 3600}
+    position, seconds = 0, 0.0
+    for match in re.finditer(r"(\d+(?:\.\d+)?)(ns|us|µs|μs|ms|s|m|h)", value.strip()):
+        if match.start() != position:
+            return None
+        position = match.end()
+        seconds += float(match.group(1)) * units[match.group(2)]
+    return seconds if position == len(value.strip()) and position else None
+
+
+def crawl_completion_fields(
+    tool_name: str,
+    run_dir: Path,
+    command: list[str] | str,
+    duration_seconds: float,
+    process_status: str,
+    output: str,
+) -> dict[str, Any]:
+    fields: dict[str, Any] | None = None
+    report_name = {"basecrawler": "scan-report.json", "browcrawler": "crawl-report.json"}.get(tool_name)
+    if report_name:
+        report_path = run_dir / report_name
+        if report_path.is_file():
+            try:
+                report = json.loads(report_path.read_text(encoding="utf-8"))
+                fields = completion_fields(report.get("completion"))
+            except (OSError, json.JSONDecodeError):
+                fields = None
+    if fields is None and tool_name in {"basecrawler", "browcrawler"}:
+        fields = parse_completion_log(output)
+    if fields is None and tool_name == "katana":
+        if isinstance(command, str):
+            try:
+                command = json.loads(command)
+            except json.JSONDecodeError:
+                command = []
+        timeout_value = None
+        for index, part in enumerate(command if isinstance(command, list) else []):
+            if part == "-ct" and index + 1 < len(command):
+                timeout_value = str(command[index + 1])
+                break
+            if isinstance(part, str) and part.startswith("-ct="):
+                timeout_value = part.partition("=")[2]
+                break
+        timeout_seconds = parse_go_duration(timeout_value) if timeout_value else None
+        if timeout_seconds and duration_seconds >= timeout_seconds - max(2.0, timeout_seconds * 0.05):
+            fields = {
+                "crawl_status": "timed_out",
+                "crawl_complete": False,
+                "completion_reasons": f"crawl_timeout:{timeout_value}",
+            }
+    if fields is None:
+        fields = {"crawl_status": "unknown", "crawl_complete": None, "completion_reasons": ""}
+    if process_status in {"failed", "timeout", "interrupted"}:
+        reason = f"process_{process_status}"
+        existing = fields["completion_reasons"]
+        fields = {
+            "crawl_status": reason,
+            "crawl_complete": False,
+            "completion_reasons": ";".join(filter(None, [existing, reason])),
+        }
+    return fields
+
+
 def save_csv(path: Path, rows: list[dict[str, Any]], columns: list[str]) -> None:
     with path.open("w", newline="", encoding="utf-8-sig") as handle:
         writer = csv.DictWriter(handle, fieldnames=columns, extrasaction="ignore")
@@ -591,7 +700,8 @@ def write_reports(output_dir: Path, run_rows: list[dict[str, Any]], url_rows: li
         row["unique_only"] = unique_only.get((row["site_id"], row["tool"], row["round"]))
     save_csv(output_dir / "results.csv", run_rows, [
         "site_id", "profile", "tool", "mode", "round", "version", "status", "exit_code",
-        "duration_seconds", "result_urls", "discovery_urls", "unique_urls", "in_scope_urls", "out_scope_urls", "unique_only",
+        "crawl_status", "crawl_complete", "completion_reasons", "duration_seconds", "result_urls",
+        "discovery_urls", "unique_urls", "in_scope_urls", "out_scope_urls", "unique_only",
         "command", "stdout_file", "stderr_file", "error",
     ])
     save_csv(output_dir / "urls.csv", url_rows, [
@@ -622,6 +732,9 @@ def write_reports(output_dir: Path, run_rows: list[dict[str, Any]], url_rows: li
             "rounds": len(rows), "known_exit_rounds": sum(row["status"] == "completed" for row in rows),
             "recovered_exit_unknown": sum(row["status"] == "recovered" for row in rows),
             "failed_or_interrupted": sum(row["status"] in {"failed", "timeout", "interrupted"} for row in rows),
+            "complete_crawls": sum(row.get("crawl_complete") is True for row in rows),
+            "incomplete_crawls": sum(row.get("crawl_complete") is False for row in rows),
+            "unknown_crawl_completion": sum(row.get("crawl_complete") is None for row in rows),
             "mean_unique_urls": mean("unique_urls"), "mean_in_scope_urls": mean("in_scope_urls"),
             "mean_result_urls": mean("result_urls"), "mean_discovery_urls": mean("discovery_urls"),
             "mean_out_scope_urls": mean("out_scope_urls"), "mean_unique_only": mean("unique_only"),
@@ -630,7 +743,8 @@ def write_reports(output_dir: Path, run_rows: list[dict[str, Any]], url_rows: li
         })
     save_csv(output_dir / "aggregate.csv", aggregate_rows, [
         "site_id", "tool", "mode", "rounds", "known_exit_rounds", "recovered_exit_unknown",
-        "failed_or_interrupted", "mean_unique_urls", "mean_in_scope_urls", "mean_out_scope_urls",
+        "failed_or_interrupted", "complete_crawls", "incomplete_crawls", "unknown_crawl_completion",
+        "mean_unique_urls", "mean_in_scope_urls", "mean_out_scope_urls",
         "mean_result_urls", "mean_discovery_urls", "mean_unique_only", "round_stability_jaccard", "mean_seconds",
     ])
 
@@ -650,14 +764,26 @@ def write_reports(output_dir: Path, run_rows: list[dict[str, Any]], url_rows: li
     lines.extend(["", "原始输出和命令记录保存在每个 `runs/<site>/<tool>/round-N/` 子目录。", ""])
     lines.extend([
         "", "## Per-tool summary", "",
-        "| Site | Tool | Mode | Rounds | Mean in-scope URLs | Mean unique-only URLs | Round stability (Jaccard) | Failed/interrupted |",
-        "|---|---|---|---:|---:|---:|---:|---:|",
+        "| Site | Tool | Mode | Rounds | Complete | Incomplete | Unknown completion | Mean in-scope URLs | Mean unique-only URLs | Round stability (Jaccard) | Failed/interrupted |",
+        "|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ])
     for row in aggregate_rows:
         stability = row["round_stability_jaccard"] if row["round_stability_jaccard"] != "" else "n/a"
         lines.append(
             f"| {row['site_id']} | {row['tool']} | {row['mode']} | {row['rounds']} "
+            f"| {row['complete_crawls']} | {row['incomplete_crawls']} | {row['unknown_crawl_completion']} "
             f"| {row['mean_in_scope_urls']} | {row['mean_unique_only']} | {stability} | {row['failed_or_interrupted']} |"
+        )
+    lines.extend([
+        "", "## Crawl completion", "",
+        "| Site | Tool | Round | Process status | Crawl status | Complete | Completion reasons/limits |",
+        "|---|---|---:|---|---|---|---|",
+    ])
+    for row in run_rows:
+        lines.append(
+            f"| {row['site_id']} | {row['tool']} | {row['round']} | {row['status']} "
+            f"| {row.get('crawl_status', 'unknown')} | {row.get('crawl_complete')} "
+            f"| {row.get('completion_reasons', '')} |"
         )
     lines.extend([
         "", "## Candidate and timing counts", "",
@@ -670,7 +796,10 @@ def write_reports(output_dir: Path, run_rows: list[dict[str, Any]], url_rows: li
             f"| {row['site_id']} | {row['tool']} | {row.get('mean_result_urls', '')} "
             f"| {row.get('mean_discovery_urls', '')} | {row['mean_in_scope_urls']} | {row['mean_seconds']} |"
         )
-    lines.extend(["", "Recovered runs have an unknown exit code; `known_exit_rounds` counts only runs whose exit code was recorded."])
+    lines.extend([
+        "", "Recovered runs have an unknown exit code; `known_exit_rounds` counts only runs whose exit code was recorded.",
+        "A zero process exit does not imply a complete crawl. `crawl_status` and `completion_reasons` report crawler budgets/failures; `unknown` means no completion evidence was available.",
+    ])
     lines.extend(["", "Raw outputs and command records are under `runs/<site>/<tool>/round-N/`.", ""])
     (output_dir / "summary.md").write_text("\n".join(lines), encoding="utf-8")
 
@@ -829,6 +958,7 @@ def run_one(
         "out_scope_urls": len(unique_outside), "command": json.dumps(command or [], ensure_ascii=False),
         "stdout_file": str(stdout_path), "stderr_file": str(stderr_path), "error": error,
     }
+    run_row.update(crawl_completion_fields(name, run_dir, command or [], duration, status, stdout + "\n" + stderr))
     (run_dir / "run-result.json").write_text(
         json.dumps(run_row, ensure_ascii=False, indent=2), encoding="utf-8"
     )
@@ -888,6 +1018,14 @@ def recover_report(output_dir: Path, site_ids: set[str] | None = None) -> int:
             if any(marker in lower_output for marker in known_failures):
                 row["status"] = "failed"
                 row["error"] = "recovered tool error output"
+            try:
+                run_command = json.loads(row.get("command", "[]")) if isinstance(row.get("command"), str) else row.get("command", [])
+            except json.JSONDecodeError:
+                run_command = []
+            row.update(crawl_completion_fields(
+                tool_name, run_dir, run_command, float(row.get("duration_seconds") or 0),
+                str(row.get("status", "recovered")), saved_output,
+            ))
         else:
             stdout_path, stderr_path = run_dir / "stdout.txt", run_dir / "stderr.txt"
             stdout = stdout_path.read_text(encoding="utf-8", errors="replace") if stdout_path.exists() else ""
@@ -941,6 +1079,9 @@ def recover_report(output_dir: Path, site_ids: set[str] | None = None) -> int:
                 "out_scope_urls": len(outside), "command": json.dumps(record.get("command", []), ensure_ascii=False),
                 "stdout_file": str(stdout_path), "stderr_file": str(stderr_path), "error": error,
             }
+            row.update(crawl_completion_fields(
+                tool_name, run_dir, record.get("command", []), 0.0, status, stdout + "\n" + stderr,
+            ))
             (run_dir / "urls.jsonl").write_text(
                 "".join(json.dumps(item, ensure_ascii=False) + "\n" for item in found_rows),
                 encoding="utf-8",
@@ -1177,6 +1318,43 @@ def self_test() -> int:
     }
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
+        assert parse_go_duration("60s") == 60
+        assert parse_go_duration("1m0s") == 60
+        assert parse_go_duration("bad") is None
+        completion_log = "[completion] partial_failure complete=false reasons=[{chunk_count_limit 210} {chunk_fetch_failure 16}]"
+        assert parse_completion_log(completion_log) == {
+            "crawl_status": "partial_failure", "crawl_complete": False,
+            "completion_reasons": "chunk_count_limit:210;chunk_fetch_failure:16",
+        }
+        (temp_path / "scan-report.json").write_text(json.dumps({
+            "completion": {
+                "status": "limited", "complete": False,
+                "reasons": [{"code": "url_limit", "count": 2}],
+            },
+        }), encoding="utf-8")
+        assert crawl_completion_fields("basecrawler", temp_path, [], 1.0, "completed", "") == {
+            "crawl_status": "limited", "crawl_complete": False, "completion_reasons": "url_limit:2",
+        }
+        assert crawl_completion_fields("browcrawler", temp_path / "no-report", [], 1.0, "completed", completion_log) == {
+            "crawl_status": "partial_failure", "crawl_complete": False,
+            "completion_reasons": "chunk_count_limit:210;chunk_fetch_failure:16",
+        }
+        assert crawl_completion_fields("katana", temp_path, ["katana", "-ct", "60s"], 60.5, "completed", "") == {
+            "crawl_status": "timed_out", "crawl_complete": False, "completion_reasons": "crawl_timeout:60s",
+        }
+        assert crawl_completion_fields("katana", temp_path, ["katana", "-ct", "60s"], 20.0, "completed", "")["crawl_complete"] is None
+        report_row = {
+            "site_id": "test", "profile": "test", "tool": "basecrawler", "mode": "static", "round": 1,
+            "version": "test", "status": "completed", "exit_code": 0, "crawl_status": "limited",
+            "crawl_complete": False, "completion_reasons": "url_limit:2", "duration_seconds": 1.0,
+            "result_urls": 1, "discovery_urls": 2, "unique_urls": 3, "in_scope_urls": 3,
+            "out_scope_urls": 0, "command": "[]", "stdout_file": "", "stderr_file": "", "error": "",
+        }
+        write_reports(temp_path, [report_row], [])
+        saved_result = next(csv.DictReader((temp_path / "results.csv").open(encoding="utf-8-sig")))
+        assert saved_result["crawl_status"] == "limited" and saved_result["crawl_complete"] == "False"
+        assert "## Crawl completion" in (temp_path / "summary.md").read_text(encoding="utf-8")
+        assert "url_limit:2" in (temp_path / "summary.md").read_text(encoding="utf-8")
         assert browcrawler_static_budget(custom) == (custom.max_pages if custom.max_pages > 0 else 200)
         command, _, error = build_command("basecrawler", custom, temp_path)
         assert error is None and command is not None

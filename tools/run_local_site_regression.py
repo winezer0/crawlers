@@ -116,6 +116,21 @@ SITE_CONFIG: dict[str, dict[str, Any]] = {
         ),
         "source_map_prefixes": ("/_app/",),
     },
+    "local-interaction-boundaries": {
+        "directory": SITES / "interaction-boundaries",
+        "entry": "../serve_static_fixture.mjs",
+        "no_build": True,
+        "preview_args": (),
+        "port": 18737,
+        "fixture_name": "interaction",
+        "static_directory": ".",
+        "seed_path": "/",
+        "expected_paths": ("/", "/same-origin-frame.html"),
+        "expected_interfaces": {"/api/interaction-search": "POST"},
+        "runtime_only_paths": ("/api/interaction-shadow", "/api/interaction-frame"),
+        "asset_prefixes": ("/main.js", "/frame.js"),
+        "source_map_prefixes": (),
+    },
 }
 
 
@@ -210,9 +225,12 @@ def build_site(
     out_dir: Path,
     skip_install: bool,
 ) -> dict[str, float]:
-    site_dir = Path(config["directory"])
     build_dir = out_dir / "build"
     build_dir.mkdir(parents=True, exist_ok=True)
+    if config.get("no_build"):
+        return {"npm_ci_seconds": 0.0, "build_seconds": 0.0}
+
+    site_dir = Path(config["directory"])
     install_seconds = ensure_dependencies(
         node, npm_cli, site_dir, build_dir / f"{name}-npm-ci.log", skip_install
     )
@@ -448,15 +466,16 @@ def crawl_site(
         and row.get("evidence") == "call-candidate"
     }
     decoy_unobserved_paths = sorted(decoy_paths - decoy_clue_paths - set(decoy_requested))
+    asset_prefixes = tuple(config.get("asset_prefixes", ())) + tuple(config["source_map_prefixes"])
     assets = [
         row for row in http_rows
         if isinstance(row.get("url"), str)
-        and any(urlsplit(str(row["url"])).path.startswith(prefix) for prefix in config["source_map_prefixes"])
+        and any(urlsplit(str(row["url"])).path.startswith(prefix) for prefix in asset_prefixes)
     ]
     maps = [row for row in assets if str(row.get("url", "")).lower().endswith(".map")]
     asset_paths = {
         path for path in succeeded
-        if any(path.startswith(prefix) for prefix in config["source_map_prefixes"])
+        if any(path.startswith(prefix) for prefix in asset_prefixes)
     }
     unexpected = sorted(succeeded - expected - asset_paths)
     analysis_failures = 0
@@ -516,7 +535,7 @@ def crawl_site(
         and not decoy_requested
         and not analysis_failures
         and not request_failures
-        and bool(maps)
+        and (not config["source_map_prefixes"] or bool(maps))
     )
     (target_dir / "site-result.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
     return result

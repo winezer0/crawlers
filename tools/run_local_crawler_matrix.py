@@ -463,7 +463,7 @@ def markdown_report(
         "# Local crawler comparison matrix",
         "",
         f"Run: `{run_id}`",
-        "Network scope: loopback-only Nuxt, React, Vue SPA, Next.js App Router, Angular, and SvelteKit fixture servers.",
+        "Network scope: loopback-only Nuxt, React, Vue SPA, Next.js App Router, Angular, SvelteKit, and browser interaction boundary fixtures.",
         f"Katana: `{katana_version}`; SHA-256 `{katana_hash}`. Its standard and headless outputs are frozen and reused by fixture fingerprint.",
         f"Basecrawler rounds: {BASECRAWLER_ROUNDS}; the best round is selected by successful expected routes, interface discovery/response, testfill HTTP success, request count, then runtime.",
         f"Basecrawler testfill: `{'enabled' if testfill_enabled else 'disabled'}`; maximum {testfill_cases_per_interface} cases per discovered interface.",

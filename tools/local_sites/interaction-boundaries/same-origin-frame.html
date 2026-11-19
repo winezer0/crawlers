@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Same-origin frame fixture</title>
+    <script src="/frame.js" defer></script>
+  </head>
+  <body>
+    <p>This action is exposed only when this document is embedded as a frame.</p>
+    <button
+      id="frame-action"
+      type="button"
+      hidden
+      data-api-root="api"
+      data-api-name="interaction-frame"
+    >
+      Load data from same-origin iframe
+    </button>
+  </body>
+</html>

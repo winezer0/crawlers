@@ -61,6 +61,29 @@ SITE_CONFIG: dict[str, dict[str, Any]] = {
         "runtime_only_paths": ("/api/react-click",),
         "source_map_prefixes": ("/assets/",),
     },
+    "local-vue": {
+        "directory": SITES / "vue",
+        "entry": "node_modules/vite/bin/vite.js",
+        "preview_args": ("preview", "--host", "127.0.0.1"),
+        "port": 18733,
+        "strict_port": True,
+        "seed_path": "/",
+        "expected_paths": ("/", "/vue/guide", "/api/vue-catalog"),
+        "expected_interfaces": {"/api/vue-search": "POST"},
+        "runtime_only_paths": ("/api/vue-click",),
+        "source_map_prefixes": ("/assets/",),
+    },
+    "local-next": {
+        "directory": SITES / "next",
+        "entry": "node_modules/next/dist/bin/next",
+        "preview_args": ("start", "--hostname", "127.0.0.1"),
+        "port": 18734,
+        "seed_path": "/",
+        "expected_paths": ("/", "/next/guide", "/api/next-catalog"),
+        "expected_interfaces": {"/api/next-search": "POST"},
+        "runtime_only_paths": ("/api/next-click",),
+        "source_map_prefixes": ("/_next/",),
+    },
 }
 
 
@@ -166,6 +189,7 @@ def build_site(
         raise RuntimeError(f"framework CLI not found: {entry}; run npm ci first")
     env = os.environ.copy()
     env["NUXT_TELEMETRY_DISABLED"] = "1"
+    env["NEXT_TELEMETRY_DISABLED"] = "1"
     code, build_seconds = run_logged(
         [node, str(entry), "build"], site_dir, build_dir / f"{name}-build.log", env=env
     )
@@ -471,7 +495,7 @@ def markdown_summary(
         "",
         f"Run: `{run_id}`",
         f"Basecrawler SHA-256: `{binary_hash}`",
-        "Network scope: loopback only; public Nuxt/React targets were not requested.",
+        "Network scope: loopback only; no public site targets were requested.",
         "",
         "## Build timing",
         "",
@@ -517,7 +541,7 @@ def markdown_summary(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run Basecrawler against local Nuxt and React fixtures.")
+    parser = argparse.ArgumentParser(description="Run Basecrawler against local framework fixtures.")
     parser.add_argument("--site", choices=("all", *SITE_CONFIG.keys()), default="all")
     parser.add_argument("--out-dir", type=Path, help="output directory; defaults under artifacts/crawler-comparison")
     parser.add_argument("--skip-install", action="store_true", help="do not run npm ci when node_modules is missing")

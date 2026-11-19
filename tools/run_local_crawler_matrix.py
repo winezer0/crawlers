@@ -39,6 +39,7 @@ KATANA = ROOT / "othercrawlers" / "katana.exe"
 KATANA_BASELINES = ROOT / "artifacts" / "crawler-comparison" / "local-katana-baselines"
 SKIP_DIRS = {"node_modules", ".nuxt", ".output", "dist", "coverage", "artifacts"}
 BASECRAWLER_ROUNDS = 3
+DEFAULT_TESTFILL_CASES_PER_INTERFACE = 3
 
 
 def fixture_fingerprint(name: str) -> str:
@@ -251,6 +252,7 @@ def build_binary(go: str, module_dir: Path, output: Path, log_path: Path) -> flo
 
 def run_basecrawler(
     name: str, origin: str, binary: Path, run_dir: Path, round_number: int,
+    testfill_enabled: bool, testfill_cases_per_interface: int,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     target_dir = run_dir / name / f"basecrawler-round-{round_number}"
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -261,25 +263,95 @@ def run_basecrawler(
     command = [
         str(binary), "-u", seed, "-d", "8", "-c", "8", "--timeout", "10",
         "--max-urls", "1000", "--max-body", "2097152", "--scope", "fqdn",
-        "--rl", "100", "--phc", "16", "-s", "all", "--no-fuzz", "--no-testfill",
-        "--no-unsafe-send", "--no-robots", "--no-sitemap", "--no-llms",
+        "--rl", "100", "--phc", "16", "-s", "all", "--no-fuzz",
+        "--max-cases-per-interface", str(testfill_cases_per_interface),
+        "--no-robots", "--no-sitemap", "--no-llms",
         "--no-probe-openapi", "--report", str(report_path), "--discoveries",
         str(discoveries_path), "-O", "json", "-o", str(output_path),
     ]
+    if not testfill_enabled:
+        command.append("--no-testfill")
     (target_dir / "command.json").write_text(
         json.dumps({"command": command, "seed": seed, "network_scope": "loopback only"}, indent=2),
         encoding="utf-8",
     )
     code, elapsed = run_logged(command, ROOT, target_dir / "stdout.txt", timeout=600)
-    rows = read_json_lines(output_path) + read_json_lines(discoveries_path)
+    output_rows = read_json_lines(output_path)
+    discovery_rows = read_json_lines(discoveries_path)
+    rows = output_rows + discovery_rows
     result = score_records(
         name, "basecrawler", f"static-round-{round_number}", elapsed, code, rows,
-        sum(1 for row in read_json_lines(output_path) if int_status(row.get("status")) > 0),
+        sum(1 for row in output_rows if int_status(row.get("status")) > 0),
     )
+    testfill_summary = parse_testfill_summary(target_dir / "stdout.txt") if testfill_enabled else {}
+    testfill_by_interface: dict[str, dict[str, int]] = {}
+    for row in output_rows:
+        if row.get("source") != "testfill":
+            continue
+        key = normalize_key(row.get("url") or row.get("endpoint"), row.get("method") or "GET")
+        if not key:
+            continue
+        label = f"{key[0]} {key[1]}"
+        metrics = testfill_by_interface.setdefault(label, {"responses": 0, "http_successes": 0})
+        status = int_status(row.get("status") or row.get("status_code"))
+        metrics["responses"] += int(status > 0)
+        metrics["http_successes"] += int(200 <= status < 400)
+    expected_testfill_interfaces: dict[str, dict[str, int]] = {}
+    for path, method in SITE_CONFIG[name].get("expected_interfaces", {}).items():
+        key = normalize_key(origin + str(path), method)
+        if not key:
+            continue
+        label = f"{key[0]} {key[1]}"
+        expected_testfill_interfaces[label] = testfill_by_interface.get(
+            label, {"responses": 0, "http_successes": 0}
+        )
+    expected_testfill_cases = len(expected_testfill_interfaces) * testfill_cases_per_interface
+    result["testfill_enabled"] = testfill_enabled
+    result["testfill_cases_per_interface"] = testfill_cases_per_interface
+    result["testfill_summary"] = testfill_summary
+    result["testfill_by_interface"] = testfill_by_interface
+    result["expected_testfill_interfaces"] = expected_testfill_interfaces
+    result["testfill_expected_cases"] = expected_testfill_cases
+    result["testfill_expected_cases_sent"] = sum(v["responses"] for v in expected_testfill_interfaces.values())
+    result["testfill_expected_http_successes"] = sum(
+        v["http_successes"] for v in expected_testfill_interfaces.values()
+    )
+    result["testfill_expected_passed"] = bool(expected_testfill_interfaces) and all(
+        metrics["responses"] >= testfill_cases_per_interface
+        and metrics["http_successes"] >= testfill_cases_per_interface
+        for metrics in expected_testfill_interfaces.values()
+    )
+    result["testfill_cases_generated"] = int(testfill_summary.get("generated", 0))
+    result["testfill_cases_sent"] = int(testfill_summary.get("sent", 0))
+    result["testfill_http_successes"] = sum(v["http_successes"] for v in testfill_by_interface.values())
     result["round"] = round_number
     result["frozen_reference"] = False
     (target_dir / "result.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
     return result, rows
+
+
+def parse_testfill_summary(log_path: Path) -> dict[str, Any]:
+    if not log_path.is_file():
+        return {}
+    for line in log_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if not line.startswith("[testfill-detail]"):
+            continue
+        summary: dict[str, Any] = {
+            key: int(value)
+            for key, value in re.findall(
+                r"\b(interfaces|tested|cases_per_interface|generated|filled|sent|skipped|unresolved|failed)=(\d+)",
+                line,
+            )
+        }
+        response_match = re.search(r"\bresponses=(.*?)\s+skip_reasons=", line)
+        summary["response_kinds"] = {
+            kind: int(count)
+            for kind, count in re.findall(r"([a-z_]+):(\d+)", response_match.group(1) if response_match else "")
+        }
+        skip_match = re.search(r"\bskip_reasons=(.*)$", line)
+        summary["skip_reasons"] = skip_match.group(1) if skip_match else ""
+        return summary
+    return {}
 
 
 def run_browcrawler(
@@ -325,15 +397,16 @@ def run_browcrawler(
 
 def markdown_report(
     run_id: str, katana_version: str, katana_hash: str, build_times: dict[str, Any],
-    site_results: list[dict[str, Any]],
+    site_results: list[dict[str, Any]], testfill_enabled: bool, testfill_cases_per_interface: int,
 ) -> str:
     lines = [
         "# Local crawler comparison matrix",
         "",
         f"Run: `{run_id}`",
-        "Network scope: loopback-only Nuxt and React fixture servers.",
+        "Network scope: loopback-only Nuxt, React, Vue SPA, and Next.js App Router fixture servers.",
         f"Katana: `{katana_version}`; SHA-256 `{katana_hash}`. Its standard and headless outputs are frozen and reused by fixture fingerprint.",
-        f"Basecrawler rounds: {BASECRAWLER_ROUNDS}; the best round is selected by successful expected routes, then interface coverage, then response count.",
+        f"Basecrawler rounds: {BASECRAWLER_ROUNDS}; the best round is selected by successful expected routes, interface discovery/response, testfill HTTP success, request count, then runtime.",
+        f"Basecrawler testfill: `{'enabled' if testfill_enabled else 'disabled'}`; maximum {testfill_cases_per_interface} cases per discovered interface.",
         "Browcrawler: one browser run per fixture; Obscura backend, interactions enabled, form submission enabled, upstream proxy disabled.",
         "",
         "## Build time",
@@ -350,18 +423,42 @@ def markdown_report(
     for site in site_results:
         lines.extend(["", f"## {site['site_id']}", ""])
         lines.extend([
-            "| Tool / mode | Runtime (s) | Page routes (2xx/3xx) | Form interfaces (found / submitted) | Runtime-only APIs (found / 2xx/3xx) | Missing targets |",
-            "|---|---:|---:|---:|---:|---|",
+            "| Tool / mode | Runtime (s) | Page routes (2xx/3xx) | Interfaces (found / 2xx/3xx) | Basecrawler testfill (sent / 2xx/3xx) | Click-only APIs (found / 2xx/3xx) | Missing targets |",
+            "|---|---:|---:|---:|---:|---:|---|",
         ])
         for result in site["comparison_rows"]:
             missing = result["page_missing"] + result["interface_missing"]
             if result["mode"] != "static-round-1" and result["mode"] != "static-round-2" and result["mode"] != "static-round-3":
                 missing += result["runtime_missing"]
+            testfill_cell = "—"
+            if result["tool"] == "basecrawler":
+                expected_testfill = result.get("expected_testfill_interfaces", {})
+                cases_per_interface = int(result.get("testfill_cases_per_interface", 0))
+                testfill_passed = bool(expected_testfill) and cases_per_interface > 0 and all(
+                    int(metrics.get("responses", 0)) >= cases_per_interface
+                    and int(metrics.get("http_successes", 0)) >= cases_per_interface
+                    for metrics in expected_testfill.values()
+                )
+                testfill_status = (
+                    ("PASS" if testfill_passed else "FAIL") if testfill_enabled else "DISABLED"
+                )
+                testfill_cell = (
+                    f"expected {result.get('testfill_expected_cases_sent', 0)}/"
+                    f"{result.get('testfill_expected_cases', 0)} sent, "
+                    f"{result.get('testfill_expected_http_successes', 0)} 2xx/3xx "
+                    f"({testfill_status}); "
+                    f"all interfaces {result.get('testfill_cases_sent', 0)}/"
+                    f"{result.get('testfill_cases_generated', 0)} sent, "
+                    f"{result.get('testfill_http_successes', 0)} 2xx/3xx, "
+                    f"{result.get('testfill_summary', {}).get('unresolved', 0)} unresolved/"
+                    f"{result.get('testfill_summary', {}).get('failed', 0)} failed"
+                )
             lines.append(
                 f"| {result['tool']} / {result['mode']} | {result['elapsed_seconds']:.2f} | "
                 f"{result['page_successes']}/{result['page_targets']} | "
                 f"{result['interfaces_found']}/{result['interface_targets']} / "
                 f"{result['interfaces_sent']}/{result['interface_targets']} | "
+                f"{testfill_cell} | "
                 f"{result['runtime_found']}/{result['runtime_targets']} / "
                 f"{result['runtime_sent']}/{result['runtime_targets']} | "
                 f"{', '.join(missing) or '—'} |"
@@ -377,7 +474,7 @@ def markdown_report(
         "",
         "## Interpretation",
         "",
-        "Page route success requires an HTTP 2xx/3xx response. A form contract counts as found when method and action are preserved; submission is reported separately. Runtime-only endpoints are surfaced separately because the HTML/source does not contain their full URL. This keeps Basecrawler's no-browser scope comparable without treating browser-only behavior as a static parser failure.",
+        "Page route success requires an HTTP 2xx/3xx response. Interface discovery and successful HTTP responses are counted separately. Basecrawler's testfill generation/sends are reported independently from ordinary crawl requests. Click-only APIs are a Browcrawler browser-interaction target; their absence from Basecrawler's no-browser results is not counted as a static crawler failure.",
         "",
     ])
     return "\n".join(lines)
@@ -388,7 +485,14 @@ def main() -> int:
     parser.add_argument("--site", choices=("all", *SITE_CONFIG.keys()), default="all")
     parser.add_argument("--out-dir", type=Path, help="output directory; defaults under artifacts/crawler-comparison")
     parser.add_argument("--skip-install", action="store_true", help="do not run npm ci if dependencies are missing")
+    parser.add_argument("--no-testfill", action="store_true", help="disable Basecrawler testfill submissions")
+    parser.add_argument(
+        "--testfill-cases-per-interface", type=int, default=DEFAULT_TESTFILL_CASES_PER_INTERFACE,
+        help=f"maximum testfill cases per interface (default: {DEFAULT_TESTFILL_CASES_PER_INTERFACE})",
+    )
     args = parser.parse_args()
+    if args.testfill_cases_per_interface < 1:
+        parser.error("--testfill-cases-per-interface must be positive")
 
     node = shutil.which("node")
     go = shutil.which("go")
@@ -461,7 +565,10 @@ def main() -> int:
 
             base_rounds: list[dict[str, Any]] = []
             for round_number in range(1, BASECRAWLER_ROUNDS + 1):
-                result, _ = run_basecrawler(name, origin, base_binary, out_dir, round_number)
+                result, _ = run_basecrawler(
+                    name, origin, base_binary, out_dir, round_number,
+                    not args.no_testfill, args.testfill_cases_per_interface,
+                )
                 base_rounds.append(result)
                 comparison_rows.append(result)
 
@@ -470,7 +577,8 @@ def main() -> int:
             best_base = max(
                 base_rounds,
                 key=lambda row: (
-                    row["page_successes"], row["interfaces_found"], row["request_records"], -row["elapsed_seconds"]
+                    row["page_successes"], row["interfaces_found"], row["interfaces_sent"],
+                    row.get("testfill_http_successes", 0), row["request_records"], -row["elapsed_seconds"]
                 ),
             )
             cache_reused = all(bool(row.get("cache_reused")) for row in baselines.values())
@@ -494,13 +602,18 @@ def main() -> int:
             "katana_version": katana_version,
             "katana_sha256": katana_hash,
             "basecrawler_rounds": BASECRAWLER_ROUNDS,
+            "testfill_enabled": not args.no_testfill,
+            "testfill_cases_per_interface": args.testfill_cases_per_interface,
             "node": subprocess.check_output([node, "--version"], text=True).strip(),
             "build_times": build_times,
             "sites": site_results,
         }
         (out_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
         (out_dir / "summary.md").write_text(
-            markdown_report(run_id, katana_version, katana_hash, build_times, site_results),
+            markdown_report(
+                run_id, katana_version, katana_hash, build_times, site_results,
+                not args.no_testfill, args.testfill_cases_per_interface,
+            ),
             encoding="utf-8",
         )
         print(out_dir)

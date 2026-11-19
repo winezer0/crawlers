@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Local Vue crawl fixture</title>
+  </head>
+  <body>
+    <header>
+      <nav aria-label="Vue fixture routes">
+        <a href="/">Home</a>
+        <a href="/vue/guide">Guide route</a>
+      </nav>
+    </header>
+    <form action="/api/vue-search" method="post">
+      <label>Search Vue fixture <input name="query" value="vue-local" /></label>
+      <input type="hidden" name="csrf" value="local-fixture-token" />
+      <button type="submit">Submit Vue search</button>
+    </form>
+    <div id="app"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

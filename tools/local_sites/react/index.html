@@ -12,6 +12,11 @@
         <a href="/react/guide">Guide route</a>
       </nav>
     </header>
+    <form action="/api/react-search" method="post">
+      <label>Search React fixture <input name="query" value="react-local" /></label>
+      <input type="hidden" name="csrf" value="local-fixture-token" />
+      <button type="submit">Submit React search</button>
+    </form>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

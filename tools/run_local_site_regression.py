@@ -40,8 +40,11 @@ SITE_CONFIG: dict[str, dict[str, Any]] = {
         "directory": SITES / "nuxt",
         "entry": "node_modules/nuxt/bin/nuxt.mjs",
         "preview_args": ("preview", "--host", "127.0.0.1"),
+        "port": 18731,
         "seed_path": "/",
         "expected_paths": ("/", "/nuxt/rendering", "/nuxt/client", "/api/nuxt-catalog"),
+        "expected_interfaces": {"/api/nuxt-search": "POST"},
+        "runtime_only_paths": ("/api/nuxt-click",),
         "source_map_prefixes": ("/_nuxt/",),
         "decoy_fixture": SITES / "nuxt" / "app" / "utils" / "nuxtCandidateDecoys.ts",
         "expected_decoy_count": 835,
@@ -50,9 +53,12 @@ SITE_CONFIG: dict[str, dict[str, Any]] = {
         "directory": SITES / "react",
         "entry": "node_modules/vite/bin/vite.js",
         "preview_args": ("preview", "--host", "127.0.0.1"),
+        "port": 18732,
         "strict_port": True,
         "seed_path": "/",
         "expected_paths": ("/", "/react/guide", "/api/react-catalog"),
+        "expected_interfaces": {"/api/react-search": "POST"},
+        "runtime_only_paths": ("/api/react-click",),
         "source_map_prefixes": ("/assets/",),
     },
 }
@@ -177,7 +183,7 @@ def free_loopback_port() -> int:
 def launch_service(
     name: str, config: dict[str, Any], node: str, out_dir: Path
 ) -> tuple[Service, int, str]:
-    port = free_loopback_port()
+    port = int(config.get("port") or free_loopback_port())
     site_dir = Path(config["directory"])
     entry = site_dir / str(config["entry"])
     command = [node, str(entry), *config["preview_args"], "--port", str(port)]
@@ -283,10 +289,10 @@ def crawl_site(
     stdout_path = target_dir / "stdout.txt"
     command = [
         str(binary), "-u", seed,
-        "-d", "2",
+        "-d", "8",
         "-c", "8",
         "--timeout", "10",
-        "--max-urls", "250",
+        "--max-urls", "1000",
         "--max-body", "2097152",
         "--scope", "fqdn",
         "--rl", "100",
@@ -327,6 +333,20 @@ def crawl_site(
     discoveries = read_json_lines(discovery_path)
     statuses = status_by_path(http_rows)
     expected = {str(path).rstrip("/") or "/" for path in config["expected_paths"]}
+    expected_interfaces = {
+        str(path).rstrip("/") or "/": str(method).upper()
+        for path, method in config.get("expected_interfaces", {}).items()
+    }
+    discovered_interfaces = {
+        (path_of(str(row["url"])).rstrip("/") or "/", str(row.get("method", "GET")).upper())
+        for row in discoveries
+        if isinstance(row.get("url"), str)
+    }
+    missing_interfaces = sorted(
+        f"{method} {path}"
+        for path, method in expected_interfaces.items()
+        if (path, method) not in discovered_interfaces
+    )
     succeeded = {
         path for path, values in statuses.items() if any(200 <= status < 400 for status in values)
     }
@@ -336,7 +356,10 @@ def crawl_site(
             path_of(str(row["url"]))
             for row in scheduled_rows
             if isinstance(row.get("url"), str)
-            and any(fragment.lower() in path_of(str(row["url"])).lower() for fragment in FALSE_CANDIDATE_FRAGMENTS)
+            and (
+                any(fragment.lower() in path_of(str(row["url"])).lower() for fragment in FALSE_CANDIDATE_FRAGMENTS)
+                or path_of(str(row["url"])) in set(config.get("runtime_only_paths", ()))
+            )
         }
     )
     decoy_values: list[str] = []
@@ -407,6 +430,11 @@ def crawl_site(
         "expected_paths": sorted(expected),
         "succeeded_paths": sorted(succeeded),
         "missing_expected_paths": missing,
+        "expected_interfaces": [f"{method} {path}" for path, method in sorted(expected_interfaces.items())],
+        "discovered_interfaces": [
+            f"{method} {path}" for path, method in sorted(discovered_interfaces)
+        ],
+        "missing_interfaces": missing_interfaces,
         "unexpected_application_paths": unexpected,
         "forbidden_requested_paths": forbidden,
         "decoy_candidate_count": len(decoy_values),
@@ -423,6 +451,7 @@ def crawl_site(
     }
     result["passed"] = (
         not missing
+        and not missing_interfaces
         and not unexpected
         and not forbidden
         and not decoy_requested
@@ -456,12 +485,13 @@ def markdown_summary(
             "",
             "## Crawl results",
             "",
-            "| Site | Status | Runtime (s) | HTTP responses | Requests attempted | Source maps | Decoy paths: total/clue/requested/ignored | Analysis/request failures | Missing expected routes | Unexpected paths | False candidates requested |",
-            "|---|---|---:|---:|---:|---:|---:|---:|---|---|---|",
+            "| Site | Status | Runtime (s) | HTTP responses | Requests attempted | Source maps | Decoy paths: total/clue/requested/ignored | Analysis/request failures | Missing expected routes | Missing interface contracts | Unexpected paths | False candidates requested |",
+            "|---|---|---:|---:|---:|---:|---:|---:|---|---|---|---|",
         ]
     )
     for result in site_results:
         missing = ", ".join(result["missing_expected_paths"]) or "—"
+        missing_interfaces = ", ".join(result["missing_interfaces"]) or "—"
         unexpected = ", ".join(result["unexpected_application_paths"]) or "—"
         forbidden = ", ".join(result["forbidden_requested_paths"]) or "—"
         decoys = (
@@ -473,12 +503,12 @@ def markdown_summary(
             f"{result['elapsed_seconds']:.2f} | {result['response_rows']} | "
             f"{result.get('requests_attempted', 'n/a')} | {result['source_map_responses']} | "
             f"{decoys} | "
-            f"{result['analysis_failures']}/{result['request_failures']} | {missing} | {unexpected} | {forbidden} |"
+            f"{result['analysis_failures']}/{result['request_failures']} | {missing} | {missing_interfaces} | {unexpected} | {forbidden} |"
         )
     lines.extend(
         [
             "",
-            "Expected routes are counted as covered when the crawler receives a 2xx or 3xx response. "
+        "Expected routes are counted as covered when the crawler receives a 2xx or 3xx response; form interfaces are covered when the expected method and path are preserved as discoveries. "
             "The false-candidate check examines HTTP response and request-error records; clue records may remain in discoveries without being scheduled.",
             "",
         ]

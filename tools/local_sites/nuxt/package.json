@@ -1,0 +1,11 @@
+{
+  "name": "basecrawler-local-nuxt-fixture",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "nuxt build"
+  },
+  "dependencies": {
+    "nuxt": "4.6.4"
+  }
+}

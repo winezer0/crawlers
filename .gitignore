@@ -32,3 +32,9 @@ go.work.sum
 # .vscode/
 /.idea
 /work/checkpoints
+/artifacts
+/tools/__pycache__
+/tools/local_sites/*/node_modules/
+/tools/local_sites/nuxt/.nuxt/
+/tools/local_sites/nuxt/.output/
+/tools/local_sites/react/dist/

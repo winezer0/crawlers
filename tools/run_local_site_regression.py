@@ -125,10 +125,12 @@ SITE_CONFIG: dict[str, dict[str, Any]] = {
         "fixture_name": "interaction",
         "static_directory": ".",
         "seed_path": "/",
-        "expected_paths": ("/", "/same-origin-frame.html"),
+        "expected_paths": ("/", "/same-origin-frame.html", "/nested-scroll.html"),
         "expected_interfaces": {"/api/interaction-search": "POST"},
-        "runtime_only_paths": ("/api/interaction-shadow", "/api/interaction-frame"),
-        "asset_prefixes": ("/main.js", "/frame.js"),
+        "runtime_only_paths": (
+            "/api/interaction-shadow", "/api/interaction-frame", "/api/interaction-nested-scroll",
+        ),
+        "asset_prefixes": ("/main.js", "/frame.js", "/nested-scroll.js"),
         "source_map_prefixes": (),
     },
 }

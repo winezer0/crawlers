@@ -63,7 +63,7 @@ const server = createServer(async (request, response) => {
       sendJSON(response, 200, { route: url.pathname, method: request.method, received: await readBody(request) });
       return;
     }
-    if (request.method === "GET" && ["catalog", "click", "menu", "scroll", "page", "shadow", "frame"].includes(action)) {
+    if (request.method === "GET" && ["catalog", "click", "menu", "scroll", "page", "shadow", "frame", "nested-scroll"].includes(action)) {
       sendJSON(response, 200, {
         route: url.pathname,
         source: url.searchParams.get("source"),

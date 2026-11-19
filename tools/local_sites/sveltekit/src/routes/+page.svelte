@@ -24,15 +24,16 @@
       .then((response) => response.json())
       .then((value) => (catalog = value));
     let scrollRequested = false;
-    const onScroll = () => {
-      const root = document.scrollingElement || document.documentElement;
-      if (!scrollRequested && window.scrollY + window.innerHeight >= root.scrollHeight - 20) {
+    const scrollTarget = document.getElementById("svelte-scroll-trigger");
+    const observer = new IntersectionObserver((entries) => {
+      if (!scrollRequested && entries.some((entry) => entry.isIntersecting)) {
         scrollRequested = true;
+        observer.disconnect();
         void requestData("svelte-scroll-trigger");
       }
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    });
+    if (scrollTarget) observer.observe(scrollTarget);
+    return () => observer.disconnect();
   });
 </script>
 
@@ -59,6 +60,6 @@
   <button id="svelte-page-next" type="button" data-api-root="api" data-api-name="svelte-page" disabled={page > 1} onclick={nextPage}>Load next page</button>
   <p>Current page: {page}</p>
   <pre>{JSON.stringify(result)}</pre>
-  <span id="svelte-scroll-trigger" hidden data-api-root="api" data-api-name="svelte-scroll"></span>
   <div aria-hidden="true" style="height: 600vh"></div>
+  <div id="svelte-scroll-trigger" data-api-root="api" data-api-name="svelte-scroll" style="height: 1px"></div>
 </main>

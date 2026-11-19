@@ -44,7 +44,7 @@ SITE_CONFIG: dict[str, dict[str, Any]] = {
         "seed_path": "/",
         "expected_paths": ("/", "/nuxt/rendering", "/nuxt/client", "/api/nuxt-catalog"),
         "expected_interfaces": {"/api/nuxt-search": "POST"},
-        "runtime_only_paths": ("/api/nuxt-click",),
+        "runtime_only_paths": ("/api/nuxt-click", "/api/nuxt-menu", "/api/nuxt-scroll", "/api/nuxt-page"),
         "source_map_prefixes": ("/_nuxt/",),
         "decoy_fixture": SITES / "nuxt" / "app" / "utils" / "nuxtCandidateDecoys.ts",
         "expected_decoy_count": 835,
@@ -58,7 +58,7 @@ SITE_CONFIG: dict[str, dict[str, Any]] = {
         "seed_path": "/",
         "expected_paths": ("/", "/react/guide", "/api/react-catalog"),
         "expected_interfaces": {"/api/react-search": "POST"},
-        "runtime_only_paths": ("/api/react-click",),
+        "runtime_only_paths": ("/api/react-click", "/api/react-menu", "/api/react-scroll", "/api/react-page"),
         "source_map_prefixes": ("/assets/",),
     },
     "local-vue": {
@@ -70,7 +70,7 @@ SITE_CONFIG: dict[str, dict[str, Any]] = {
         "seed_path": "/",
         "expected_paths": ("/", "/vue/guide", "/api/vue-catalog"),
         "expected_interfaces": {"/api/vue-search": "POST"},
-        "runtime_only_paths": ("/api/vue-click",),
+        "runtime_only_paths": ("/api/vue-click", "/api/vue-menu", "/api/vue-scroll", "/api/vue-page"),
         "source_map_prefixes": ("/assets/",),
     },
     "local-next": {
@@ -81,8 +81,40 @@ SITE_CONFIG: dict[str, dict[str, Any]] = {
         "seed_path": "/",
         "expected_paths": ("/", "/next/guide", "/api/next-catalog"),
         "expected_interfaces": {"/api/next-search": "POST"},
-        "runtime_only_paths": ("/api/next-click",),
+        "runtime_only_paths": ("/api/next-click", "/api/next-menu", "/api/next-scroll", "/api/next-page"),
         "source_map_prefixes": ("/_next/",),
+    },
+    "local-angular": {
+        "directory": SITES / "angular",
+        "entry": "serve.mjs",
+        "build_entry": "node_modules/@angular/cli/bin/ng.js",
+        "preview_args": (),
+        "port": 18735,
+        "fixture_name": "angular",
+        "static_directory": "dist/local-angular/browser",
+        "seed_path": "/",
+        "expected_paths": ("/", "/angular/guide", "/api/angular-catalog"),
+        "expected_interfaces": {"/api/angular-search": "POST"},
+        "runtime_only_paths": (
+            "/api/angular-click", "/api/angular-menu", "/api/angular-scroll", "/api/angular-page",
+        ),
+        "source_map_prefixes": ("/main-", "/polyfills-", "/chunk-", "/styles-"),
+    },
+    "local-sveltekit": {
+        "directory": SITES / "sveltekit",
+        "entry": "serve.mjs",
+        "build_entry": "node_modules/vite/bin/vite.js",
+        "preview_args": (),
+        "port": 18736,
+        "fixture_name": "svelte",
+        "static_directory": "build",
+        "seed_path": "/",
+        "expected_paths": ("/", "/svelte/guide", "/api/svelte-catalog"),
+        "expected_interfaces": {"/api/svelte-search": "POST"},
+        "runtime_only_paths": (
+            "/api/svelte-click", "/api/svelte-menu", "/api/svelte-scroll", "/api/svelte-page",
+        ),
+        "source_map_prefixes": ("/_app/",),
     },
 }
 
@@ -184,7 +216,7 @@ def build_site(
     install_seconds = ensure_dependencies(
         node, npm_cli, site_dir, build_dir / f"{name}-npm-ci.log", skip_install
     )
-    entry = site_dir / str(config["entry"])
+    entry = site_dir / str(config.get("build_entry", config["entry"]))
     if not entry.is_file():
         raise RuntimeError(f"framework CLI not found: {entry}; run npm ci first")
     env = os.environ.copy()
@@ -215,6 +247,9 @@ def launch_service(
         command.append("--strictPort")
     env = os.environ.copy()
     env.update({"HOST": "127.0.0.1", "PORT": str(port), "NUXT_TELEMETRY_DISABLED": "1"})
+    if config.get("static_directory"):
+        env["CRAWL_FIXTURE_STATIC_DIR"] = str(config["static_directory"])
+        env["CRAWL_FIXTURE_NAME"] = str(config["fixture_name"])
     for key in list(env):
         if key.lower() in {"http_proxy", "https_proxy", "all_proxy"}:
             env.pop(key, None)

@@ -40,3 +40,7 @@ go.work.sum
 /tools/local_sites/react/dist/
 /tools/local_sites/next/.next/
 /tools/local_sites/vue/dist/
+/tools/local_sites/angular/dist/
+/tools/local_sites/angular/.angular/
+/tools/local_sites/sveltekit/build/
+/tools/local_sites/sveltekit/.svelte-kit/

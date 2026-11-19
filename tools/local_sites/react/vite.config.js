@@ -12,6 +12,12 @@ function localApiFixture() {
           response.end(JSON.stringify({ route: url.pathname, source: url.searchParams.get("source") }));
           return;
         }
+        if (request.method === "GET" && ["menu", "scroll", "page"].some((name) => url.pathname === `/api/react-${name}`)) {
+          response.statusCode = 200;
+          response.setHeader("content-type", "application/json; charset=utf-8");
+          response.end(JSON.stringify({ route: url.pathname, page: Number(url.searchParams.get("page") || 1) }));
+          return;
+        }
         if (request.method === "POST" && url.pathname === "/api/react-search") {
           const chunks = [];
           request.on("data", (chunk) => chunks.push(chunk));

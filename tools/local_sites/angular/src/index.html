@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Local Angular crawl fixture</title>
+    <base href="/" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <app-root>
+      <main>
+        <h1>Local Angular crawl fixture</h1>
+        <nav aria-label="Angular fixture routes">
+          <a href="/angular/guide">Guide route</a>
+        </nav>
+        <form action="/api/angular-search" method="post">
+          <label>Search Angular fixture <input name="query" value="angular-local" /></label>
+          <input type="hidden" name="csrf" value="local-fixture-token" />
+          <button type="submit">Submit Angular search</button>
+        </form>
+      </main>
+    </app-root>
+  </body>
+</html>

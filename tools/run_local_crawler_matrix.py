@@ -284,7 +284,8 @@ def run_basecrawler(
         sum(1 for row in output_rows if int_status(row.get("status")) > 0),
     )
     testfill_summary = parse_testfill_summary(target_dir / "stdout.txt") if testfill_enabled else {}
-    testfill_by_interface: dict[str, dict[str, int]] = {}
+    testfill_by_interface: dict[str, dict[str, Any]] = {}
+    testfill_audit_records: list[dict[str, Any]] = []
     for row in output_rows:
         if row.get("source") != "testfill":
             continue
@@ -292,10 +293,53 @@ def run_basecrawler(
         if not key:
             continue
         label = f"{key[0]} {key[1]}"
-        metrics = testfill_by_interface.setdefault(label, {"responses": 0, "http_successes": 0})
+        metrics = testfill_by_interface.setdefault(
+            label, {"responses": 0, "http_successes": 0, "provenance": []}
+        )
         status = int_status(row.get("status") or row.get("status_code"))
         metrics["responses"] += int(status > 0)
         metrics["http_successes"] += int(200 <= status < 400)
+        audit = {
+            "url": row.get("url") or row.get("endpoint"),
+            "original_url": row.get("original_url"),
+            "method": row.get("method") or "GET",
+            "status": status,
+            "content_type": row.get("content_type"),
+            "request_source": row.get("request_source") or row.get("source"),
+            "confidence": row.get("confidence"),
+            "evidence": row.get("evidence"),
+            "kind": row.get("kind"),
+        }
+        metrics["provenance"].append(audit)
+        testfill_audit_records.append(audit)
+
+    def is_nonbusiness_testfill(record: dict[str, Any]) -> bool:
+        request_source = str(record.get("request_source") or "")
+        url = str(record.get("url") or "")
+        content_type = str(record.get("content_type") or "").lower()
+        confidence = str(record.get("confidence") or "")
+        evidence = str(record.get("evidence") or "")
+        kind = str(record.get("kind") or "")
+        return (
+            (confidence == "template" and request_source.startswith("js-ast") and evidence != "request-call")
+            or kind == "rsc"
+            or "text/x-component" in content_type
+            or "_rsc=" in url
+        )
+
+    testfill_suspect_records = [row for row in testfill_audit_records if is_nonbusiness_testfill(row)]
+    excluded_expression_templates = [
+        {
+            "url": row.get("url"),
+            "source": row.get("source"),
+            "confidence": row.get("confidence"),
+            "evidence": row.get("evidence"),
+        }
+        for row in discovery_rows
+        if str(row.get("source") or "").startswith("js-ast")
+        and row.get("confidence") == "template"
+        and row.get("evidence") != "request-call"
+    ]
     expected_testfill_interfaces: dict[str, dict[str, int]] = {}
     for path, method in SITE_CONFIG[name].get("expected_interfaces", {}).items():
         key = normalize_key(origin + str(path), method)
@@ -310,6 +354,10 @@ def run_basecrawler(
     result["testfill_cases_per_interface"] = testfill_cases_per_interface
     result["testfill_summary"] = testfill_summary
     result["testfill_by_interface"] = testfill_by_interface
+    result["testfill_audit_records"] = testfill_audit_records
+    result["testfill_suspect_records"] = testfill_suspect_records
+    result["testfill_excluded_expression_templates"] = excluded_expression_templates
+    result["testfill_provenance_audit_passed"] = not testfill_suspect_records
     result["expected_testfill_interfaces"] = expected_testfill_interfaces
     result["testfill_expected_cases"] = expected_testfill_cases
     result["testfill_expected_cases_sent"] = sum(v["responses"] for v in expected_testfill_interfaces.values())
@@ -327,6 +375,18 @@ def run_basecrawler(
     result["round"] = round_number
     result["frozen_reference"] = False
     (target_dir / "result.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
+    (target_dir / "testfill-audit.json").write_text(
+        json.dumps(
+            {
+                "sent_cases": testfill_audit_records,
+                "suspect_nonbusiness_cases": testfill_suspect_records,
+                "excluded_expression_templates": excluded_expression_templates,
+                "passed": not testfill_suspect_records,
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
     return result, rows
 
 
@@ -403,7 +463,7 @@ def markdown_report(
         "# Local crawler comparison matrix",
         "",
         f"Run: `{run_id}`",
-        "Network scope: loopback-only Nuxt, React, Vue SPA, and Next.js App Router fixture servers.",
+        "Network scope: loopback-only Nuxt, React, Vue SPA, Next.js App Router, Angular, and SvelteKit fixture servers.",
         f"Katana: `{katana_version}`; SHA-256 `{katana_hash}`. Its standard and headless outputs are frozen and reused by fixture fingerprint.",
         f"Basecrawler rounds: {BASECRAWLER_ROUNDS}; the best round is selected by successful expected routes, interface discovery/response, testfill HTTP success, request count, then runtime.",
         f"Basecrawler testfill: `{'enabled' if testfill_enabled else 'disabled'}`; maximum {testfill_cases_per_interface} cases per discovered interface.",
@@ -453,6 +513,11 @@ def markdown_report(
                     f"{result.get('testfill_summary', {}).get('unresolved', 0)} unresolved/"
                     f"{result.get('testfill_summary', {}).get('failed', 0)} failed"
                 )
+                audit_status = "clean" if result.get("testfill_provenance_audit_passed") else "flagged"
+                testfill_cell += (
+                    f"; provenance {audit_status}, "
+                    f"{len(result.get('testfill_excluded_expression_templates', []))} expression templates excluded"
+                )
             lines.append(
                 f"| {result['tool']} / {result['mode']} | {result['elapsed_seconds']:.2f} | "
                 f"{result['page_successes']}/{result['page_targets']} | "
@@ -469,6 +534,9 @@ def markdown_report(
             f"Basecrawler best round: **{best['round']}** ({best['page_successes']}/{best['page_targets']} page routes, "
             f"{best['interfaces_found']}/{best['interface_targets']} form interfaces, {best['elapsed_seconds']:.2f}s).",
             f"Frozen Katana cache reused: `{site['katana_cache_reused']}`.",
+            f"Testfill provenance audit: **{'PASS' if best.get('testfill_provenance_audit_passed') else 'FAIL'}**; "
+            f"{len(best.get('testfill_audit_records', []))} sent cases recorded with source/evidence, "
+            f"{len(best.get('testfill_suspect_records', []))} suspect framework/expression cases.",
         ])
     lines.extend([
         "",

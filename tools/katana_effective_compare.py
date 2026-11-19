@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+from collections import Counter
 import hashlib
 import json
 import math
@@ -51,6 +52,32 @@ def jsonlines(path):
     return result
 
 
+def _append_source_record(entry, filename, req, status):
+    source = str(req.get('source') or '')
+    referer = req.get('referer') or req.get('headers', {}).get('Referer') or (source if source.startswith('http') else '')
+    confidence = str(req.get('confidence') or '').lower()
+    evidence = str(req.get('evidence') or '')
+    kind = str(req.get('kind') or '')
+    tag = str(req.get('tag') or '')
+    attribute = str(req.get('attribute') or '')
+    signature = (filename, source, confidence, evidence, kind, tag, attribute)
+    indexes = entry.setdefault('_source_record_index', {})
+    record = indexes.get(signature)
+    if record is None:
+        record = {'record_file': filename, 'source': source, 'confidence': confidence,
+                  'evidence': evidence, 'kind': kind, 'tag': tag, 'attribute': attribute,
+                  'referers': [], 'depths': [], 'status_codes': []}
+        indexes[signature] = record
+        entry.setdefault('source_records', []).append(record)
+    if referer and referer not in record['referers']:
+        record['referers'].append(referer)
+    depth = req.get('depth')
+    if depth is not None and depth not in record['depths']:
+        record['depths'].append(depth)
+    if status and status not in record['status_codes']:
+        record['status_codes'].append(status)
+
+
 def candidates(folder, mode, target):
     result = {}
     files = ['results.jsonl', 'discoveries.jsonl'] if mode == 'basecrawler' else ['results.jsonl']
@@ -62,12 +89,42 @@ def candidates(folder, mode, target):
             if not url or not common.in_scope(url, target):
                 continue
             method = (req.get('method') or 'GET').upper()
-            entry = {'url': url, 'method': method, 'source': req.get('source', ''),
-				     'headers': protocol_headers(req.get('headers')),
-                     'params': req.get('params', []), 'json_body_params': req.get('json_body_params', []),
-                     'referer': req.get('referer') or req.get('headers', {}).get('Referer') or (req.get('source','') if str(req.get('source','')).startswith('http') else '')}
-            result[(method, url, tuple(sorted(entry['params'] or [])),
-                    tuple(sorted(entry['json_body_params'] or [])))] = entry
+            headers = protocol_headers(req.get('headers'))
+            params = req.get('params', [])
+            json_body_params = req.get('json_body_params', [])
+            key = (method, url, tuple(sorted(params or [])), tuple(sorted(json_body_params or [])))
+            entry = result.get(key)
+            if entry is None:
+                source = req.get('source', '')
+                entry = {'url': url, 'method': method, 'source': source,
+                         'confidence': str(req.get('confidence') or '').lower(),
+                         'evidence': str(req.get('evidence') or ''),
+                         'headers': headers, 'params': params, 'json_body_params': json_body_params,
+                         'referer': req.get('referer') or req.get('headers', {}).get('Referer') or (source if str(source).startswith('http') else ''),
+                         'source_records': []}
+                result[key] = entry
+            # Results are visited before source edges, so this only chooses a
+            # primary provenance once. All later evidence remains attached.
+            if not entry.get('source') and req.get('source'):
+                entry['source'] = req['source']
+                entry['confidence'] = str(req.get('confidence') or '').lower()
+                entry['evidence'] = str(req.get('evidence') or '')
+                entry['referer'] = req.get('referer') or req.get('headers', {}).get('Referer') or ''
+            _append_source_record(entry, name, req,
+                                  (row.get('status', 0) if mode == 'basecrawler' else row.get('response', {}).get('status_code', 0)))
+            entry.setdefault('header_profiles', [])
+            if headers and headers not in entry['header_profiles']:
+                entry['header_profiles'].append(headers)
+    for entry in result.values():
+        entry.pop('_source_record_index', None)
+        entry['sources'] = sorted({record['source'] for record in entry['source_records'] if record['source']})
+        for record in entry['source_records']:
+            record['referers'].sort()
+            record['depths'].sort()
+            record['status_codes'].sort()
+        entry['source_records'].sort(key=lambda record: (
+            record['record_file'], record['source'], record['confidence'], record['evidence'],
+            record['kind'], record['tag'], record['attribute']))
     return list(result.values())
 
 
@@ -214,9 +271,52 @@ def classify(row, control):
     return 'other_content'
 
 
+def candidate_is_crawlable(row):
+    records = row.get('source_records') or []
+    confidences = [str(record.get('confidence') or '').lower() for record in records]
+    if not confidences:
+        confidences = [str(row.get('confidence') or '').lower()]
+    # Empty confidence is the normal label for links and historical output
+    # created before confidence metadata existed. Explicit clues/templates are
+    # never treated as visited coverage.
+    return any(confidence not in ('clue', 'template') for confidence in confidences)
+
+
+def eligible(row, mode='katana'):
+    p = urlsplit(row['url'])
+    return (row['method'] == 'GET' and not ASSET.search(p.path)
+            and not any(x in row['url'] for x in ('EXPR', '%7B', '{', '%5C', '\\'))
+            and (mode != 'basecrawler' or candidate_is_crawlable(row)))
+
+
+BASE_ONLY_SAMPLE_PER_SOURCE = 5
+
+
+def base_only_source_samples(base_rows, reference):
+    grouped = {}
+    for row in base_rows:
+        if row['url'] in reference or not eligible(row, 'basecrawler'):
+            continue
+        positive_records = [record for record in row.get('source_records', [])
+                            if str(record.get('confidence') or '').lower() not in ('clue', 'template')]
+        sources = {record.get('source') or 'unknown' for record in positive_records}
+        if not sources:
+            sources = {row.get('source') or 'unknown'}
+        for source in sources:
+            grouped.setdefault(source, set()).add(row['url'])
+    samples = {}
+    for source, urls in grouped.items():
+        samples[source] = sorted(urls, key=lambda value: hashlib.sha256(value.encode()).hexdigest())[:BASE_ONLY_SAMPLE_PER_SOURCE]
+    return samples
+
+
 def verify_site(target, args):
     site = args.output / target.site_id
     data = {m: json.loads((site / m / 'candidates.json').read_text(encoding='utf-8')) for m in MODES}
+    # Rebuild Basecrawler candidates from raw records so source, evidence and
+    # confidence are not lost in older flattened candidates.json snapshots.
+    data['basecrawler'] = candidates(site / 'basecrawler', 'basecrawler', target)
+    write_json(site / 'basecrawler' / 'candidates.json', data['basecrawler'])
     # Frozen candidate files predate protocol metadata. Enrich in memory from
     # their raw records without changing the frozen reference or rerunning it.
     for mode in MODES:
@@ -228,10 +328,7 @@ def verify_site(target, args):
             data[mode] = json.loads((args.reference_snapshot / target.site_id / (mode + '.json')).read_text(encoding='utf-8'))
     # Only real GET pages/data can be verified with GET. POST and template
     # contracts remain visible but never receive invented success labels.
-    def eligible(row):
-        p = urlsplit(row['url'])
-        return row['method'] == 'GET' and not ASSET.search(p.path) and not any(x in row['url'] for x in ('EXPR', '%7B', '{', '%5C', '\\'))
-    sets = {m: {r['url'] for r in rows if eligible(r)} for m, rows in data.items()}
+    sets = {m: {r['url'] for r in rows if eligible(r, m)} for m, rows in data.items()}
     reference = sets['katana-static'] | sets['katana-browser']
     # Verify all reference candidates plus potential basecrawler aliases, not
     # thousands of unrelated base-only sitemap URLs. Alias success still needs
@@ -252,7 +349,12 @@ def verify_site(target, args):
     ref_protocols = {protocol_identity(u,observed_headers.get(u)) for u in reference if is_rsc(u)} - {None}
     potential_aliases = {u for u in sets['basecrawler'] if alias_path(u) in ref_paths and
                          (not is_rsc(u) or protocol_identity(u,base_headers.get(u)) in ref_protocols)}
-    urls = sorted(reference | potential_aliases, key=lambda u: hashlib.sha256(u.encode()).hexdigest())
+    source_samples = base_only_source_samples(data['basecrawler'], reference)
+    sampled_sources = {}
+    for source, sample_urls in source_samples.items():
+        for url in sample_urls:
+            sampled_sources.setdefault(url, []).append(source)
+    urls = sorted(reference | potential_aliases | sampled_sources.keys(), key=lambda u: hashlib.sha256(u.encode()).hexdigest())
     headers = {u: observed_headers.get(u,{}) for u in urls}
     for u in urls:
         if u in base_headers and protocol_identity(u,base_headers[u]) == protocol_identity(u,headers[u]):
@@ -356,16 +458,53 @@ def verify_site(target, args):
             detail['gap_evidence'] = gap_evidence(detail['url'], data, runs['basecrawler'], jsonlines(site/'basecrawler/results.jsonl'))
     (site / 'comparison.jsonl').write_text(''.join(json.dumps(r, ensure_ascii=False)+'\n' for r in details), encoding='utf-8')
     metrics = {m: mode_metrics(m, data[m], jsonlines(site/m/'results.jsonl'), runs[m]) for m in MODES}
+    base_pairs = {(r['method'], r['url']) for r in data['basecrawler']}
+    crawlable_pairs = {(r['method'], r['url']) for r in data['basecrawler'] if candidate_is_crawlable(r)}
+    metrics['basecrawler']['crawlable_discovered_method_urls'] = len(crawlable_pairs)
+    metrics['basecrawler']['clue_or_template_method_urls'] = len(base_pairs - crawlable_pairs)
     for m in MODES[1:]:
         refs = valid & sets[m]
         metrics[m]['effective_reference'] = len(refs)
         metrics[m]['base_covered'] = sum(u in covered for u in refs)
+    source_candidate_counts = {}
+    for row in data['basecrawler']:
+        pair = (row['method'], row['url'])
+        records = row.get('source_records') or [{'source': row.get('source') or 'unknown',
+                                                  'confidence': row.get('confidence', '')}]
+        for record in records:
+            source = record.get('source') or 'unknown'
+            source_stats = source_candidate_counts.setdefault(source, {'candidate_method_urls': set(),
+                                                                        'crawlable_method_urls': set()})
+            source_stats['candidate_method_urls'].add(pair)
+            if str(record.get('confidence') or '').lower() not in ('clue', 'template'):
+                source_stats['crawlable_method_urls'].add(pair)
+    candidate_audit = {
+        'candidate_method_urls': len(base_pairs),
+        'crawlable_method_urls': len(crawlable_pairs),
+        'clue_or_template_method_urls': len(base_pairs - crawlable_pairs),
+        'sample_policy': f'At most {BASE_ONLY_SAMPLE_PER_SOURCE} deterministic GET URLs per source, excluding Katana URLs and non-crawlable clues/templates.',
+        'sampled_base_only_urls': len(sampled_sources),
+        'sources': {},
+    }
+    for source, stats in sorted(source_candidate_counts.items()):
+        urls_for_source = source_samples.get(source, [])
+        sample_classes = Counter(categories.get(url, 'unverified') for url in urls_for_source)
+        candidate_audit['sources'][source] = {
+            'candidate_method_urls': len(stats['candidate_method_urls']),
+            'crawlable_method_urls': len(stats['crawlable_method_urls']),
+            'sampled_base_only_urls': len(urls_for_source),
+            'sample_classes': dict(sorted(sample_classes.items())),
+            'confirmed_not_found_or_fallback': sum(sample_classes.get(name, 0) for name in ('not_found', 'html_fallback', 'soft_404')),
+            'sample_urls': [{'url': url, 'classification': categories.get(url, 'unverified')} for url in urls_for_source],
+        }
     write_json(site/'metrics.json', {'modes':metrics, 'discovery_coverage':ratio,
         'strict_acceptance_unchanged':True, 'protocol_evidence_required':True,
-        'reference_freshness':'historical frozen crawl; saved HTTP evidence may also be historical'})
+        'reference_freshness':'historical frozen crawl; saved HTTP evidence may also be historical',
+        'basecrawler_candidate_audit':candidate_audit})
     report = {'schema_version':2, 'protocol_aware':True, 'site': target.site_id, 'reference_candidates': len(reference), 'verified_valid_reference': len(valid),
               'covered': len(covered), 'coverage': ratio, 'missing': missing, 'unresolved': unresolved,
               'verification_classes': dict(__import__('collections').Counter(categories.values())),
+              'basecrawler_candidate_audit': candidate_audit,
               'runs': runs, 'passed': bool(valid) and ratio >= .95 and not unresolved and all(r['status'] == 'completed' for r in runs.values()),
               'discovery_coverage_passed': bool(valid) and ratio >= .95 and not unresolved,
               'note': 'HTTP-confirmed GET page/JSON coverage only; methods, templates and business semantics are not certified.'}

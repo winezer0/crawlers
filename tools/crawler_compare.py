@@ -1003,6 +1003,24 @@ def select_verification_candidates(
     return candidates
 
 
+def classify_verification_status(status_code: str, curl_returncode: int) -> str:
+    if curl_returncode and status_code == "000":
+        return "network_error"
+    if status_code in {"404", "410"}:
+        return "not_found"
+    if status_code in {"405", "501"}:
+        return "head_unsupported"
+    if status_code in {"401", "403"}:
+        return "restricted_or_blocked"
+    if status_code == "429":
+        return "rate_limited"
+    if status_code.startswith("5"):
+        return "server_error"
+    if status_code.startswith(("2", "3")):
+        return "accessible"
+    return "unknown"
+
+
 def verify_unique_urls(
     run_dir: Path,
     *,
@@ -1073,31 +1091,7 @@ def verify_unique_urls(
             output = completed.stdout.splitlines()
             status_code = output[0].strip() if output else "000"
             final_url = output[1].strip() if len(output) > 1 else ""
-            if status_code in {"405", "501"}:
-                fallback = [curl, "--range", "0-0", "--location", "--silent", "--show-error",
-                            "--max-time", str(timeout), "--max-filesize", "65536", "--output", os.devnull,
-                            "--write-out", "%{http_code}\n%{url_effective}", url]
-                completed = subprocess.run(
-                    fallback, cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                    timeout=timeout + 5, check=False, encoding="utf-8", errors="replace",
-                )
-                output = completed.stdout.splitlines()
-                status_code = output[0].strip() if output else status_code
-                final_url = output[1].strip() if len(output) > 1 else final_url
-            if completed.returncode and status_code == "000":
-                classification = "network_error"
-            elif status_code in {"404", "410"}:
-                classification = "not_found"
-            elif status_code in {"401", "403"}:
-                classification = "restricted_or_blocked"
-            elif status_code == "429":
-                classification = "rate_limited"
-            elif status_code.startswith("5"):
-                classification = "server_error"
-            elif status_code.startswith(("2", "3")):
-                classification = "accessible"
-            else:
-                classification = "unknown"
+            classification = classify_verification_status(status_code, completed.returncode)
             rows.append({**base, "http_status": status_code, "classification": classification,
                          "final_url": final_url, "curl_exit": completed.returncode,
                          "error": completed.stderr.strip()})
@@ -1122,7 +1116,7 @@ def verify_unique_urls(
     )
     summary = [
         "# Candidate URL verification" if source_tool else "# Unique URL verification", "",
-        verification_mode + " Uses HEAD with redirect following and a one-byte ranged GET fallback when HEAD is unsupported.", "",
+        verification_mode + " Uses HEAD with redirect following. Status 405/501 is marked `head_unsupported`; no GET request is sent.", "",
         f"Run directory: `{run_dir}`", "", "| Classification | Count |", "|---|---:|",
     ]
     summary.extend(f"| {name} | {count} |" for name, count in sorted(counts.items()))
@@ -1138,6 +1132,13 @@ def self_test() -> int:
     assert normalize_url("HTTP://Example.COM:80/a/../b?q=1#part") == "http://example.com/b?q=1"
     assert normalize_url("https://example.com:443") == "https://example.com/"
     assert normalize_url("ftp://example.com/a") is None
+    assert classify_verification_status("200", 0) == "accessible"
+    assert classify_verification_status("404", 0) == "not_found"
+    assert classify_verification_status("405", 0) == "head_unsupported"
+    assert classify_verification_status("501", 0) == "head_unsupported"
+    assert classify_verification_status("403", 0) == "restricted_or_blocked"
+    assert classify_verification_status("429", 0) == "rate_limited"
+    assert classify_verification_status("000", 6) == "network_error"
     target = _target("x", "https://example.com/", "test")
     assert in_scope("https://example.com/path", target)
     wildcard_target = Target("x", "https://example.com/", "test", ("*.example.com",), 1, 1, 1, 1, 1)

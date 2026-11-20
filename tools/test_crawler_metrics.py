@@ -53,5 +53,23 @@ class ProtocolMetricsTests(unittest.TestCase):
         self.assertEqual(metrics['observed_attempted_method_urls'], 4)
         self.assertEqual(metrics['observed_successful_method_urls'], 1)
 
+    def test_base_metrics_use_request_audit_before_fsu_filtered_rows(self):
+        completion = {'requests': [
+            {'requested_url': 'https://example.test/page', 'final_url': 'https://example.test/page',
+             'method': 'GET', 'http_status': 200, 'state': 'complete'},
+            {'requested_url': 'https://example.test/redirect', 'final_url': 'https://example.test/page',
+             'method': 'GET', 'http_status': 200, 'state': 'complete'},
+            {'requested_url': 'https://example.test/update', 'final_url': 'https://example.test/update',
+             'method': 'POST', 'http_status': 200, 'state': 'complete'},
+        ]}
+        candidates = [{'url': 'https://example.test/page', 'method': 'GET'}]
+
+        metrics = mode_metrics('basecrawler', candidates, [], {
+            'seconds': 1.0, 'status': 'completed', 'crawl_completion': completion,
+        })
+
+        self.assertEqual(metrics['observed_attempted_method_urls'], 3)
+        self.assertEqual(metrics['observed_successful_method_urls'], 2)
+
 
 if __name__=='__main__': unittest.main()

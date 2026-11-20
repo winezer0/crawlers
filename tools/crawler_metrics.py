@@ -43,6 +43,17 @@ def equivalent_rsc(a, b):
 def mode_metrics(mode, candidates, rows, run):
     attempted, successful = set(), set()
     boundaries = 0
+    completion = run.get('crawl_completion', {})
+    audited_requests = completion.get('requests') if completion else None
+    method_audit_complete = mode == 'basecrawler' and audited_requests is not None and all('method' in request for request in audited_requests)
+    if method_audit_complete:
+        rows = [{
+            'url': request.get('requested_url', ''),
+            'final_url': request.get('final_url') or request.get('requested_url', ''),
+            'method': request.get('method'),
+            'status': request.get('http_status', 0),
+            'error': request.get('error') or ('' if request.get('state') == 'complete' else request.get('state', '')),
+        } for request in audited_requests]
     for row in rows:
         req = row if mode == 'basecrawler' else row.get('request', {})
         url = req.get('url') if mode == 'basecrawler' else req.get('endpoint')
@@ -54,9 +65,9 @@ def mode_metrics(mode, candidates, rows, run):
         boundaries += boundary
         if status or (row.get('error') and not boundary):
             attempted.add(key)
-        if 200 <= (status or 0) < 300 and not row.get('error') and not row.get('truncated'):
+        if (200 <= (status or 0) < 300 and not row.get('error') and not row.get('truncated')
+                and row.get('final_url', url) == url):
             successful.add(key)
-    completion = run.get('crawl_completion', {})
     reasons = {r['code']: r['count'] for r in completion.get('reasons', [])}
     return {'discovered_method_urls': len({(r['method'], r['url']) for r in candidates}),
             'observed_attempted_method_urls': len(attempted),

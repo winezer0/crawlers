@@ -38,6 +38,73 @@ def usable_control(row):
     return (200 <= code < 300 or code in (404, 410)) and not row.get('error') and not row.get('truncated')
 
 
+def parse_control_url_overrides(assignments):
+    overrides = {}
+    for assignment in assignments or []:
+        site, separator, url = assignment.partition('=')
+        if not separator or not site or not url:
+            raise ValueError('control URL must use SITE_ID=URL')
+        if site not in common.TARGETS:
+            raise ValueError('unknown control URL site: ' + site)
+        if site in overrides:
+            raise ValueError('duplicate control URL for site: ' + site)
+        overrides[site] = url
+    return overrides
+
+
+def control_url_for(target, overrides=None):
+    url = (overrides or {}).get(target.site_id)
+    if not url:
+        return urljoin(target.seed, '/__crawler_benchmark_missing_20261118__')
+    parsed, seed = urlsplit(url), urlsplit(target.seed)
+    if parsed.scheme not in ('http', 'https') or (parsed.scheme.lower(), parsed.netloc.lower()) != (seed.scheme.lower(), seed.netloc.lower()):
+        raise ValueError('control URL must have the same origin as the target seed: ' + target.site_id)
+    return url
+
+
+def reference_execution_metrics(valid_urls, rows):
+    valid = set(valid_urls)
+    attempted, successful = set(), set()
+    for row in rows:
+        url = common.normalize_url(row.get('url') or row.get('requested_url') or '')
+        method = str(row.get('method') or 'GET').upper()
+        if method != 'GET' or url not in valid:
+            continue
+        status = int(row.get('status') or row.get('status_code') or 0)
+        error = str(row.get('error') or '')
+        if status or error and error != 'max depth reached':
+            attempted.add(url)
+        if 200 <= status < 300 and not error and not row.get('truncated'):
+            successful.add(url)
+    coverage = lambda urls: len(urls) / len(valid) if valid else None
+    return {
+        'dispatched_reference_urls': len(attempted),
+        'dispatched_reference_coverage': coverage(attempted),
+        'successful_reference_urls': len(successful),
+        'successful_reference_coverage': coverage(successful),
+        'successful_reference_missing': sorted(valid - successful),
+    }, attempted, successful
+
+
+def strict_acceptance_failures(valid, discovery_coverage, unresolved, runs, execution):
+    failures = []
+    if not valid:
+        failures.append('no_http_confirmed_reference_urls')
+    if discovery_coverage is None or discovery_coverage < .95:
+        failures.append('discovery_coverage_below_95_percent')
+    success_coverage = execution.get('successful_reference_coverage')
+    if success_coverage is None or success_coverage < .95:
+        failures.append('successful_request_coverage_below_95_percent')
+    if unresolved:
+        failures.append('unresolved_reference_urls')
+    if any(run.get('status') != 'completed' for run in runs.values()):
+        failures.append('one_or_more_tool_runs_not_completed')
+    base_completion = runs.get('basecrawler', {}).get('crawl_completion', {})
+    if base_completion.get('complete') is not True:
+        failures.append('basecrawler_crawl_incomplete')
+    return failures
+
+
 def write_json(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding='utf-8')
@@ -135,7 +202,7 @@ def run_one(target, mode, args):
     folder = args.output / target.site_id / mode
     folder.mkdir(parents=True, exist_ok=True)
     if mode == 'basecrawler':
-        command = [str(args.base), '-u', target.seed, '-d', str(args.depth), '-c', '1',
+        command = [str(args.base), '-u', target.seed, '-d', str(args.depth), '-c', str(getattr(args, 'base_concurrency', 1)),
                    '--max-urls', str(BASE_MAX_URLS), '--mdp', str(args.pages),
                    '--timeout', '15', '--max-body', '16777216',
                    '--scope', 'fqdn', '--rl', str(args.rate), '--ct', str(args.seconds) + 's',
@@ -192,6 +259,7 @@ def run_one(target, mode, args):
     record = {'site': target.site_id, 'mode': mode, 'status': status, 'exit_code': code,
               'seconds': time.monotonic() - started, 'candidates': len(rows),
               'binary_sha256': binary_hash, 'crawl_completion': completion,
+              'concurrency': getattr(args, 'base_concurrency', 1) if mode == 'basecrawler' else 1,
               'request_errors': sum(bool(r.get('error')) and r.get('error') != 'max depth reached' for r in raw_rows),
               'boundary_discoveries': sum(r.get('error') == 'max depth reached' for r in raw_rows)}
     write_json(folder / 'run.json', record)
@@ -365,12 +433,12 @@ def verify_site(target, args):
             headers[u] = dict(headers[u], **base_headers[u])
     cache = {r['url']: r for r in jsonlines(site / 'verification.jsonl') if r.get('status') and r.get('status') not in (400,401,403,429) and not r.get('error') and not r.get('truncated')}
     cache = {u:r for u,r in cache.items() if not is_rsc(u) or (headers.get(u) and protocol_headers(r.get('request_headers')) == headers[u])}
-    control_url = urljoin(target.seed, '/__crawler_benchmark_missing_20261118__')
+    control_url = control_url_for(target, getattr(args, 'control_urls', None))
     control_path = site / 'control.json'
     control = json.loads(control_path.read_text(encoding='utf-8')) if control_path.exists() else {}
     # Freeze a successful control alongside the per-URL evidence. A transient
     # failure during resume must not silently replace the baseline control.
-    if not usable_control(control):
+    if not usable_control(control) or control.get('url') != control_url:
         for _ in range(2):
             control = fetch(control_url, args.verify_timeout, args.proxy)
             if usable_control(control):
@@ -456,12 +524,17 @@ def verify_site(target, args):
             run['status'] = 'failed_requests'
             write_json(site / m / 'run.json', run)
     ratio = len(covered) / len(valid) if valid else None
+    base_result_rows = jsonlines(site / 'basecrawler/results.jsonl')
+    execution, dispatched_urls, successful_urls = reference_execution_metrics(valid, base_result_rows)
     for detail in details:
         detail['verification_request_headers'] = cache[detail['url']].get('request_headers', {})
+        detail['base_dispatched'] = detail['url'] in dispatched_urls
+        detail['base_successful'] = detail['url'] in successful_urls
         if not detail['base_covered']:
-            detail['gap_evidence'] = gap_evidence(detail['url'], data, runs['basecrawler'], jsonlines(site/'basecrawler/results.jsonl'))
+            detail['gap_evidence'] = gap_evidence(detail['url'], data, runs['basecrawler'], base_result_rows)
     (site / 'comparison.jsonl').write_text(''.join(json.dumps(r, ensure_ascii=False)+'\n' for r in details), encoding='utf-8')
-    metrics = {m: mode_metrics(m, data[m], jsonlines(site/m/'results.jsonl'), runs[m]) for m in MODES}
+    metrics = {m: mode_metrics(m, data[m], base_result_rows if m == 'basecrawler' else jsonlines(site/m/'results.jsonl'), runs[m]) for m in MODES}
+    metrics['basecrawler']['reference_execution'] = execution
     base_pairs = {(r['method'], r['url']) for r in data['basecrawler']}
     crawlable_pairs = {(r['method'], r['url']) for r in data['basecrawler'] if candidate_is_crawlable(r)}
     metrics['basecrawler']['crawlable_discovered_method_urls'] = len(crawlable_pairs)
@@ -502,16 +575,27 @@ def verify_site(target, args):
             'sample_urls': [{'url': url, 'classification': categories.get(url, 'unverified')} for url in urls_for_source],
         }
     write_json(site/'metrics.json', {'modes':metrics, 'discovery_coverage':ratio,
-        'strict_acceptance_unchanged':True, 'protocol_evidence_required':True,
+        'reference_execution':execution, 'strict_acceptance_version':'complete-crawl-v2',
+        'protocol_evidence_required':True,
         'reference_freshness':'historical frozen crawl; saved HTTP evidence may also be historical',
         'basecrawler_candidate_audit':candidate_audit})
+    strict_failures = strict_acceptance_failures(len(valid), ratio, unresolved, runs, execution)
+    crawl_complete = runs['basecrawler'].get('crawl_completion', {}).get('complete') is True
     report = {'schema_version':2, 'protocol_aware':True, 'site': target.site_id, 'reference_candidates': len(reference), 'verified_valid_reference': len(valid),
-              'covered': len(covered), 'coverage': ratio, 'missing': missing, 'unresolved': unresolved,
+              'covered': len(covered), 'coverage': ratio, 'discovery_coverage': ratio,
+              'dispatched_reference_urls': execution['dispatched_reference_urls'],
+              'dispatched_reference_coverage': execution['dispatched_reference_coverage'],
+              'successful_reference_urls': execution['successful_reference_urls'],
+              'successful_reference_coverage': execution['successful_reference_coverage'],
+              'successful_reference_missing': execution['successful_reference_missing'],
+              'crawl_complete': crawl_complete, 'strict_failure_reasons': strict_failures,
+              'missing': missing, 'unresolved': unresolved,
               'verification_classes': dict(__import__('collections').Counter(categories.values())),
               'basecrawler_candidate_audit': candidate_audit,
-              'runs': runs, 'passed': bool(valid) and ratio >= .95 and not unresolved and all(r['status'] == 'completed' for r in runs.values()),
+              'runs': runs, 'passed': not strict_failures,
               'discovery_coverage_passed': bool(valid) and ratio >= .95 and not unresolved,
-              'note': 'HTTP-confirmed GET page/JSON coverage only; methods, templates and business semantics are not certified.'}
+              'execution_coverage_passed': bool(valid) and execution['successful_reference_coverage'] is not None and execution['successful_reference_coverage'] >= .95,
+              'note': 'Discovery, exact crawler dispatch, successful exact HTTP responses, and complete traversal are reported separately; aliases do not count as exact execution.'}
     write_json(site / 'effective.json', report)
     print(json.dumps({k: v for k, v in report.items() if k not in ('runs', 'missing', 'unresolved')}), flush=True)
     return report
@@ -526,7 +610,8 @@ def summarize(args, targets):
     passed = sum(r['passed'] for r in rows)
     goal = len(rows) == len(targets) and passed >= math.ceil(.8 * len(targets))
     write_json(args.output / 'acceptance.json', {'goal_met': goal, 'required_sites': len(targets), 'evaluated_sites': len(rows), 'passed_sites': passed,
-               'criteria': '>=80% sites, >=95% HTTP-confirmed GET coverage, all three runs completed, no unresolved reference URLs',
+               'acceptance_version': 'complete-crawl-v2',
+               'criteria': '>=80% sites; per site >=95% discovery and exact successful GET coverage, no unresolved references, all tool runs completed, and Basecrawler crawl_completion.complete=true',
                'limitations': ['This does not certify all methods or runtime-only business flows.', 'Content equality proves HTML aliases only, not distinct API equivalence.']})
     lines = ['# Katana 双模式有效结果对比', '', '| 站点 | base秒 | Katana静态秒 | Katana浏览器秒 | 已核验有效参考 | 覆盖 | 待核验 | 静态/浏览器参考状态 | 达标 |', '|---|---:|---:|---:|---:|---:|---:|---|---|']
     for r in rows:
@@ -535,6 +620,21 @@ def summarize(args, targets):
         reference_status = '/'.join(r['runs'][m]['status'] for m in MODES[1:])
         lines.append('| ' + ' | '.join([r['site'], *seconds, str(r['verified_valid_reference']), coverage, str(len(r['unresolved'])), reference_status, str(r['passed'])]) + ' |')
     lines += ['', f'达标站点：{passed}/{len(targets)}；总目标达成：{goal}。', '', '只核验 GET 页面/JSON；方法、参数、模板及业务有效性另行验收。未核验、网络错误和浏览器失败不会被当成达标。', '启用 basecrawler --fsu；发现记录保留过滤前证据。参数值和数字 ID 不做武断归并，HTML 别名需响应证据。']
+    execution_lines = ['', '## Execution acceptance (complete-crawl-v2)', '',
+                       '| Site | Base c | Discovery | Exact successful GET | Crawl complete | Strict failure reasons |',
+                       '|---|---:|---:|---:|---|---|']
+    for r in rows:
+        base_run = r['runs']['basecrawler']
+        completion = base_run.get('crawl_completion', {})
+        discovery = r.get('discovery_coverage')
+        successful = r.get('successful_reference_coverage')
+        discovery_text = f'{discovery:.2%}' if discovery is not None else 'n/a'
+        successful_text = f'{successful:.2%}' if successful is not None else 'n/a'
+        complete_text = str(completion.get('complete') is True)
+        reasons = ', '.join(r.get('strict_failure_reasons', [])) or 'none'
+        execution_lines.append('| ' + ' | '.join([r['site'], str(base_run.get('concurrency', 1)), discovery_text,
+                                                  successful_text, complete_text, reasons]) + ' |')
+    lines += execution_lines
     (args.output / 'summary.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
     return goal
 
@@ -547,6 +647,7 @@ def main():
     p.add_argument('--base', type=Path, default=ROOT / 'basecrawler/bin/basecrawler.exe')
     p.add_argument('--chrome', type=Path, default=common.find_chrome(None))
     p.add_argument('--depth', type=int, default=2)
+    p.add_argument('--base-concurrency', type=int, default=1, help='Basecrawler worker profile; Katana reference stays at concurrency 1')
     p.add_argument('--strategy', choices=['breadth-first', 'depth-first'], default='breadth-first')
     p.add_argument('--pages', type=int, default=100)
     p.add_argument('--seconds', type=int, default=90)
@@ -556,12 +657,19 @@ def main():
     p.add_argument('--verify-limit', type=int, default=0, help='0 = verify all; a positive limit cannot certify unresolved URLs')
     p.add_argument('--verify-timeout', type=int, default=12)
     p.add_argument('--verify-workers', type=int, default=4, help='in-flight verification requests per site; start rate still limited by --rate')
+    p.add_argument('--control-url', action='append', default=[], metavar='SITE_ID=URL', help='same-origin missing-page control; repeat for multiple sites')
     p.add_argument('--resume', action='store_true')
     args = p.parse_args()
     args.output = args.output.resolve()
-    if args.rate < 1 or args.workers < 1 or args.verify_workers < 1:
-        p.error('rate and workers must be positive')
+    if args.rate < 1 or args.workers < 1 or args.verify_workers < 1 or args.base_concurrency < 1:
+        p.error('rate, workers, verify-workers, and base-concurrency must be positive')
     targets = [common.TARGETS[t] for t in args.targets.split(',')]
+    try:
+        args.control_urls = parse_control_url_overrides(args.control_url)
+        for target in targets:
+            control_url_for(target, args.control_urls)
+    except ValueError as e:
+        p.error(str(e))
     args.output.mkdir(parents=True, exist_ok=True)
     if args.action == 'run':
         if not args.chrome or not args.chrome.is_file():

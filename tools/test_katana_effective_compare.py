@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent))
 import katana_effective_compare as compare
@@ -38,6 +39,67 @@ class ClassificationTests(unittest.TestCase):
         row['content_type'] = 'text/html'
         self.assertEqual(compare.classify(row, {'status': 0, 'error': 'timeout'}), 'unconfirmed_control')
         self.assertEqual(compare.classify(row, {'status': 404, 'sha256': 'different'}), 'valid_page')
+
+
+class AcceptanceAndControlTests(unittest.TestCase):
+    def test_execution_coverage_requires_an_actual_successful_get(self):
+        valid = {'https://example.test/a', 'https://example.test/b', 'https://example.test/c'}
+        rows = [
+            {'url': 'https://example.test/a', 'method': 'GET', 'status': 200},
+            {'url': 'https://example.test/b', 'method': 'GET', 'error': 'max depth reached'},
+            {'url': 'https://example.test/c', 'method': 'GET', 'status': 500},
+            {'url': 'https://example.test/a', 'method': 'POST', 'status': 200},
+        ]
+
+        metrics, dispatched, successful = compare.reference_execution_metrics(valid, rows)
+
+        self.assertEqual(dispatched, {'https://example.test/a', 'https://example.test/c'})
+        self.assertEqual(successful, {'https://example.test/a'})
+        self.assertEqual(metrics['dispatched_reference_urls'], 2)
+        self.assertEqual(metrics['dispatched_reference_coverage'], 2 / 3)
+        self.assertEqual(metrics['successful_reference_urls'], 1)
+        self.assertEqual(metrics['successful_reference_coverage'], 1 / 3)
+
+    def test_strict_acceptance_rejects_limited_crawl_even_with_full_coverage(self):
+        runs = {
+            'basecrawler': {'status': 'completed', 'crawl_completion': {'status': 'limited', 'complete': False}},
+            'katana-static': {'status': 'completed'},
+            'katana-browser': {'status': 'completed'},
+        }
+        execution = {'successful_reference_coverage': 1.0}
+
+        failures = compare.strict_acceptance_failures(10, 1.0, [], runs, execution)
+
+        self.assertEqual(failures, ['basecrawler_crawl_incomplete'])
+
+    def test_control_url_override_is_site_scoped_and_same_origin(self):
+        target = SimpleNamespace(site_id='testasp', seed='https://example.test/start')
+        overrides = compare.parse_control_url_overrides(['testasp=https://example.test/__missing'])
+        self.assertEqual(compare.control_url_for(target, overrides), 'https://example.test/__missing')
+        self.assertEqual(compare.control_url_for(target, {}), 'https://example.test/__crawler_benchmark_missing_20261118__')
+        with self.assertRaises(ValueError):
+            compare.control_url_for(target, {'testasp': 'https://other.test/__missing'})
+        with self.assertRaises(ValueError):
+            compare.parse_control_url_overrides(['testasp=https://example.test/a', 'testasp=https://example.test/b'])
+
+
+class RunnerProfileTests(unittest.TestCase):
+    def test_base_concurrency_is_recorded_and_applied_only_to_basecrawler(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            binary = root / 'basecrawler.exe'
+            binary.write_bytes(b'fixture')
+            args = SimpleNamespace(
+                output=root / 'output', base=binary, depth=2, base_concurrency=4,
+                pages=20, rate=2, seconds=10, strategy='breadth-first', proxy='', resume=False,
+            )
+            target = SimpleNamespace(site_id='fixture', seed='https://example.test/', allowed_hosts=('example.test',))
+            with patch.object(compare.subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout='', stderr='')):
+                record = compare.run_one(target, 'basecrawler', args)
+
+            command = json.loads((args.output / 'fixture' / 'basecrawler' / 'command.json').read_text(encoding='utf-8'))['command']
+            self.assertEqual(command[command.index('-c') + 1], '4')
+            self.assertEqual(record['concurrency'], 4)
 
 
 class CandidateEvidenceTests(unittest.TestCase):

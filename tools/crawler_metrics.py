@@ -54,7 +54,7 @@ def mode_metrics(mode, candidates, rows, run):
         boundaries += boundary
         if status or (row.get('error') and not boundary):
             attempted.add(key)
-        if 200 <= (status or 0) < 300:
+        if 200 <= (status or 0) < 300 and not row.get('error') and not row.get('truncated'):
             successful.add(key)
     completion = run.get('crawl_completion', {})
     reasons = {r['code']: r['count'] for r in completion.get('reasons', [])}

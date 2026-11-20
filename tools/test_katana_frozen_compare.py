@@ -49,7 +49,8 @@ class FrozenReferenceTests(unittest.TestCase):
             self.folder('reference/testasp/'+mode,['https://x/'])
         binary=self.root/'base.exe';binary.write_bytes(b'fixture')
         args=SimpleNamespace(reference=reference,targets='testasp',base=binary,output=self.root/'output',
-                             rounds=1,workers=1,resume=False,verify_only=False)
+                             rounds=1,workers=1,resume=False,verify_only=False,base_concurrency=4,
+                             control_urls={'testasp':'https://testasp.net/__control_missing'})
         manifest={'sites':{'testasp':{'settings':{'katana_sha256':'fixture','seconds':60,'pages':80,'depth':2,'rate':2,'strategy':'breadth-first','proxy':''}}}}
         with patch('katana_frozen_compare.validate_reference',return_value=manifest), \
              patch('katana_frozen_compare.bench.run_one') as execute, \
@@ -58,6 +59,12 @@ class FrozenReferenceTests(unittest.TestCase):
             run(args)
         self.assertEqual(execute.call_count,1)
         self.assertEqual(execute.call_args.args[1],'basecrawler')
+        options=execute.call_args.args[2]
+        self.assertEqual(options.base_concurrency,4)
+        self.assertEqual(options.control_urls,args.control_urls)
+        config=json.loads((args.output/'config.json').read_text(encoding='utf-8'))
+        self.assertEqual(config['base_concurrency'],4)
+        self.assertEqual(config['control_urls'],args.control_urls)
 
 
 if __name__=='__main__':unittest.main()

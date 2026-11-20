@@ -35,5 +35,23 @@ class ProtocolMetricsTests(unittest.TestCase):
         self.assertIsNone(m['requests_attempted'])
         self.assertIsNone(m['analysis_failures'])
 
+    def test_base_success_excludes_truncated_and_error_responses(self):
+        rows = [
+            {'url': 'https://example.test/ok', 'method': 'GET', 'status': 200},
+            {'url': 'https://example.test/truncated', 'method': 'GET', 'status': 200, 'truncated': True},
+            {'url': 'https://example.test/error', 'method': 'GET', 'status': 200, 'error': 'analysis failed'},
+            {'url': 'https://example.test/not-found', 'method': 'GET', 'status': 404},
+            {'url': 'https://example.test/boundary', 'method': 'GET', 'error': 'max depth reached'},
+        ]
+        candidates = [{'url': row['url'], 'method': 'GET'} for row in rows]
+
+        metrics = mode_metrics('basecrawler', candidates, rows, {
+            'seconds': 1.0, 'status': 'completed',
+            'crawl_completion': {'requests_attempted': 4, 'unvisited': []},
+        })
+
+        self.assertEqual(metrics['observed_attempted_method_urls'], 4)
+        self.assertEqual(metrics['observed_successful_method_urls'], 1)
+
 
 if __name__=='__main__': unittest.main()

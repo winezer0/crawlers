@@ -62,20 +62,33 @@ def control_url_for(target, overrides=None):
     return url
 
 
-def reference_execution_metrics(valid_urls, rows):
+def reference_execution_metrics(valid_urls, rows, completion=None):
     valid = set(valid_urls)
     attempted, successful = set(), set()
+    audited_requests = completion.get('requests') if completion else None
+    method_audit_complete = audited_requests is not None and all('method' in request for request in audited_requests)
+    if method_audit_complete:
+        rows = [{
+            'url': request.get('requested_url', ''),
+            'requested_url': request.get('requested_url', ''),
+            'final_url': request.get('final_url') or request.get('requested_url', ''),
+            'method': request.get('method'),
+            'status': request.get('http_status', 0),
+            'error': request.get('error') or ('' if request.get('state') == 'complete' else request.get('state', '')),
+        } for request in audited_requests]
     for row in rows:
-        url = common.normalize_url(row.get('url') or row.get('requested_url') or '')
+        requested_url = common.normalize_url(row.get('requested_url') or row.get('url') or '')
+        final_url = common.normalize_url(row.get('final_url') or row.get('url') or requested_url)
         method = str(row.get('method') or 'GET').upper()
-        if method != 'GET' or url not in valid:
+        if method != 'GET' or requested_url not in valid:
             continue
         status = int(row.get('status') or row.get('status_code') or 0)
         error = str(row.get('error') or '')
         if status or error and error != 'max depth reached':
-            attempted.add(url)
-        if 200 <= status < 300 and not error and not row.get('truncated'):
-            successful.add(url)
+            attempted.add(requested_url)
+        if (200 <= status < 300 and not error and not row.get('truncated')
+                and final_url == requested_url):
+            successful.add(requested_url)
     coverage = lambda urls: len(urls) / len(valid) if valid else None
     return {
         'dispatched_reference_urls': len(attempted),
@@ -236,10 +249,12 @@ def run_one(target, mode, args):
     folder = args.output / target.site_id / mode
     folder.mkdir(parents=True, exist_ok=True)
     if mode == 'basecrawler':
+        base_rate_limit = getattr(args, 'base_rate_limit', None)
+        rate_limit = args.rate if base_rate_limit is None else base_rate_limit
         command = [str(args.base), '-u', target.seed, '-d', str(args.depth), '-c', str(getattr(args, 'base_concurrency', 1)),
                    '--max-urls', str(BASE_MAX_URLS), '--mdp', str(args.pages),
                    '--timeout', '15', '--max-body', '16777216',
-                   '--scope', 'fqdn', '--rl', str(args.rate), '--ct', str(args.seconds) + 's',
+                   '--scope', 'fqdn', '--rl', str(rate_limit), '--ct', str(args.seconds) + 's',
                    '--no-fuzz', '--no-testfill', '--no-probe-openapi', '--fsu', '-s', 'all',
                    '--stable-host-order', '-v', '--discoveries', str(folder / 'discoveries.jsonl'),
                    '--report', str(folder / 'report.json'), '-o', str(folder / 'results.jsonl')]
@@ -294,6 +309,7 @@ def run_one(target, mode, args):
               'seconds': time.monotonic() - started, 'candidates': len(rows),
               'binary_sha256': binary_hash, 'crawl_completion': completion,
               'concurrency': getattr(args, 'base_concurrency', 1) if mode == 'basecrawler' else 1,
+              'rate_limit': (getattr(args, 'base_rate_limit', None) if getattr(args, 'base_rate_limit', None) is not None else args.rate) if mode == 'basecrawler' else args.rate,
               'request_errors': sum(bool(r.get('error')) and r.get('error') != 'max depth reached' for r in raw_rows),
               'boundary_discoveries': sum(r.get('error') == 'max depth reached' for r in raw_rows)}
     write_json(folder / 'run.json', record)
@@ -562,7 +578,8 @@ def verify_site(target, args):
             write_json(site / m / 'run.json', run)
     ratio = len(covered) / len(valid) if valid else None
     base_result_rows = jsonlines(site / 'basecrawler/results.jsonl')
-    execution, dispatched_urls, successful_urls = reference_execution_metrics(valid, base_result_rows)
+    completion = runs.get('basecrawler', {}).get('crawl_completion', {})
+    execution, dispatched_urls, successful_urls = reference_execution_metrics(valid, base_result_rows, completion)
     discovery_metrics = method_aware_discovery_metrics(valid, non_get_reference, base_method_urls)
     non_get_covered = non_get_reference & base_method_urls
     all_method_valid = discovery_metrics['valid_targets']
@@ -653,7 +670,7 @@ def verify_site(target, args):
               'runs': runs, 'passed': not strict_failures,
               'discovery_coverage_passed': bool(all_method_valid) and all_method_discovery >= .95 and not unresolved,
               'execution_coverage_passed': bool(valid) and execution['successful_reference_coverage'] is not None and execution['successful_reference_coverage'] >= .95,
-              'note': 'Discovery, exact crawler dispatch, successful exact HTTP responses, and complete traversal are reported separately; aliases do not count as exact execution.'}
+              'note': 'Execution is scored from crawler request-attempt audit, independently of output deduplication. Requested and final URLs must match for an exact successful response; aliases do not count.'}
     write_json(site / 'effective.json', report)
     print(json.dumps({k: v for k, v in report.items() if k not in ('runs', 'missing', 'unresolved')}), flush=True)
     return report

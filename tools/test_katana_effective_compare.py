@@ -91,6 +91,46 @@ class AcceptanceAndControlTests(unittest.TestCase):
         self.assertEqual(metrics['successful_reference_urls'], 1)
         self.assertEqual(metrics['successful_reference_coverage'], 1 / 3)
 
+    def test_completion_audit_counts_fsu_filtered_requests_but_rejects_aliases(self):
+        valid = {
+            'https://example.test/a',
+            'https://example.test/b',
+            'https://example.test/c',
+            'https://example.test/d',
+        }
+        completion = {'requests': [
+            {'requested_url': 'https://example.test/a', 'final_url': 'https://example.test/a',
+             'method': 'GET', 'http_status': 200, 'state': 'complete'},
+            {'requested_url': 'https://example.test/b', 'final_url': 'https://example.test/elsewhere',
+             'method': 'GET', 'http_status': 200, 'state': 'complete'},
+            {'requested_url': 'https://example.test/c', 'final_url': 'https://example.test/c',
+             'method': 'POST', 'http_status': 200, 'state': 'complete'},
+            {'requested_url': 'https://example.test/d', 'final_url': 'https://example.test/d',
+             'method': 'GET', 'http_status': 500, 'state': 'failed', 'error': 'status 500'},
+        ]}
+
+        metrics, dispatched, successful = compare.reference_execution_metrics(valid, [], completion)
+
+        self.assertEqual(dispatched, {
+            'https://example.test/a', 'https://example.test/b', 'https://example.test/d'})
+        self.assertEqual(successful, {'https://example.test/a'})
+        self.assertEqual(metrics['successful_reference_coverage'], 1 / 4)
+
+    def test_legacy_completion_without_methods_falls_back_to_result_rows(self):
+        valid = {'https://example.test/a', 'https://example.test/b'}
+        legacy_completion = {'requests': [
+            {'requested_url': 'https://example.test/a', 'http_status': 200, 'state': 'complete'},
+        ]}
+        rows = [
+            {'url': 'https://example.test/a', 'method': 'POST', 'status': 200},
+            {'url': 'https://example.test/b', 'method': 'GET', 'status': 200},
+        ]
+
+        metrics, _, successful = compare.reference_execution_metrics(valid, rows, legacy_completion)
+
+        self.assertEqual(successful, {'https://example.test/b'})
+        self.assertEqual(metrics['successful_reference_urls'], 1)
+
     def test_strict_acceptance_rejects_limited_crawl_even_with_full_coverage(self):
         runs = {
             'basecrawler': {'status': 'completed', 'crawl_completion': {'status': 'limited', 'complete': False}},
@@ -115,13 +155,13 @@ class AcceptanceAndControlTests(unittest.TestCase):
 
 
 class RunnerProfileTests(unittest.TestCase):
-    def test_base_concurrency_is_recorded_and_applied_only_to_basecrawler(self):
+    def test_base_concurrency_and_rate_limit_are_applied_to_basecrawler(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             binary = root / 'basecrawler.exe'
             binary.write_bytes(b'fixture')
             args = SimpleNamespace(
-                output=root / 'output', base=binary, depth=2, base_concurrency=4,
+                output=root / 'output', base=binary, depth=2, base_concurrency=4, base_rate_limit=9,
                 pages=20, rate=2, seconds=10, strategy='breadth-first', proxy='', resume=False,
             )
             target = SimpleNamespace(site_id='fixture', seed='https://example.test/', allowed_hosts=('example.test',))
@@ -130,7 +170,9 @@ class RunnerProfileTests(unittest.TestCase):
 
             command = json.loads((args.output / 'fixture' / 'basecrawler' / 'command.json').read_text(encoding='utf-8'))['command']
             self.assertEqual(command[command.index('-c') + 1], '4')
+            self.assertEqual(command[command.index('--rl') + 1], '9')
             self.assertEqual(record['concurrency'], 4)
+            self.assertEqual(record['rate_limit'], 9)
 
 
 class CandidateEvidenceTests(unittest.TestCase):

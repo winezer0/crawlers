@@ -107,7 +107,7 @@ def summarize(output, targets, rounds, base_concurrency=1):
                       'reference_seconds': {m: reports[0]['runs'][m]['seconds'] for m in bench.MODES[1:]},
                       'base_stability': stability, 'missing': [r['missing'] for r in reports],
                       'passed': rounds >= 3 and stability >= .9 and all(r['passed'] for r in reports)})
-    result = {'acceptance_version': 'complete-crawl-v2', 'sites': sites,
+    result = {'acceptance_version': 'complete-crawl-v3', 'sites': sites,
               'base_concurrency': base_concurrency,
               'passed_sites': sum(s['passed'] for s in sites), 'rounds': rounds,
               'goal_met': sum(s['passed'] for s in sites) >= math.ceil(.8 * len(sites)),
@@ -128,8 +128,8 @@ def summarize(output, targets, rounds, base_concurrency=1):
             m = metric['modes']['basecrawler']
             lines.append(f"| {s['site']} | {n} | {m['discovered_method_urls']} | {m['observed_successful_method_urls']} | {m['requests_attempted']} | {m['analysis_failures']} | {m['unvisited']} | {m['seconds']:.2f} |")
     lines += ['', '## Discovery, request execution, and completion', '',
-              '| Site | Base c | Round | Discovery | Exact successful GET | Crawl complete | Unvisited | Strict failure reasons |',
-              '|---|---:|---:|---:|---:|---|---:|---|']
+              '| Site | Base c | Round | All-method discovery | Non-GET targets found | Exact successful GET | Crawl complete | Unvisited | Strict failure reasons |',
+              '|---|---:|---:|---:|---:|---:|---|---:|---|']
     for s in sites:
         for n, metric in enumerate(s['metrics'], 1):
             m = metric['modes']['basecrawler']
@@ -138,8 +138,9 @@ def summarize(output, targets, rounds, base_concurrency=1):
             success = execution.get('successful_reference_coverage')
             discovery_text = f'{discovery:.2%}' if discovery is not None else 'n/a'
             success_text = f'{success:.2%}' if success is not None else 'n/a'
+            non_get = f"{execution.get('non_get_discovered_targets', 0)}/{execution.get('non_get_reference_targets', 0)}"
             failures = s['strict_failure_reasons'][n-1] if n-1 < len(s['strict_failure_reasons']) else []
-            lines.append(f"| {s['site']} | {s['base_concurrency']} | {n} | {discovery_text} | {success_text} | {s['crawl_complete'][n-1]} | {m['unvisited']} | {', '.join(failures) or 'none'} |")
+            lines.append(f"| {s['site']} | {s['base_concurrency']} | {n} | {discovery_text} | {non_get} | {success_text} | {s['crawl_complete'][n-1]} | {m['unvisited']} | {', '.join(failures) or 'none'} |")
     lines += ['', 'Katana network totals and JavaScript analysis failures are unknown, not zero. See each site metrics.json for separate static/browser reference coverage.',
               'RSC verification replays observed protocol headers; ordinary HTML GET cannot certify a Flight response. Cache-token aliases require matching context and response hashes.']
     (output / 'summary.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')

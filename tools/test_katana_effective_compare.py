@@ -42,6 +42,25 @@ class ClassificationTests(unittest.TestCase):
 
 
 class AcceptanceAndControlTests(unittest.TestCase):
+    def test_observed_non_get_reference_is_a_method_aware_discovery_target(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            site = Path(temporary)
+            for mode in ('katana-static', 'katana-browser'):
+                (site / mode).mkdir()
+            post_url = 'https://example.test/api/action'
+            (site / 'katana-browser' / 'results.jsonl').write_text(
+                json.dumps({'request': {'method': 'POST', 'endpoint': post_url},
+                            'response': {'status_code': 200}}) + '\n',
+                encoding='utf-8')
+            target_rows = {
+                'katana-static': [],
+                'katana-browser': [{'method': 'POST', 'url': post_url}],
+            }
+
+            targets = compare.observed_non_get_targets(site, ('katana-static', 'katana-browser'), target_rows)
+
+        self.assertEqual(targets, {('POST', post_url)})
+
     def test_execution_coverage_requires_an_actual_successful_get(self):
         valid = {'https://example.test/a', 'https://example.test/b', 'https://example.test/c'}
         rows = [

@@ -86,6 +86,23 @@ def reference_execution_metrics(valid_urls, rows):
     }, attempted, successful
 
 
+def observed_non_get_targets(site, modes, target_rows):
+    """Return method+URL pairs with a successful frozen non-GET response."""
+    observed = set()
+    for mode in modes:
+        for row in jsonlines(site / mode / 'results.jsonl'):
+            request = row.get('request') or {}
+            response = row.get('response') or {}
+            method = str(request.get('method') or 'GET').upper()
+            url = common.normalize_url(request.get('endpoint') or '')
+            status = int(response.get('status_code') or 0)
+            if method != 'GET' and url and 200 <= status < 300 and not row.get('error'):
+                observed.add((method, url))
+    candidates = {(str(row.get('method') or 'GET').upper(), common.normalize_url(row.get('url') or ''))
+                  for mode in modes for row in target_rows[mode]}
+    return observed & candidates
+
+
 def strict_acceptance_failures(valid, discovery_coverage, unresolved, runs, execution):
     failures = []
     if not valid:
@@ -402,6 +419,7 @@ def verify_site(target, args):
     # contracts remain visible but never receive invented success labels.
     sets = {m: {r['url'] for r in rows if eligible(r, m)} for m, rows in data.items()}
     reference = sets['katana-static'] | sets['katana-browser']
+    non_get_reference = observed_non_get_targets(site, MODES[1:], data)
     # Verify all reference candidates plus potential basecrawler aliases, not
     # thousands of unrelated base-only sitemap URLs. Alias success still needs
     # the final URL or identical HTML evidence below.
@@ -487,6 +505,8 @@ def verify_site(target, args):
     categories = {u: classify(v, control) for u, v in cache.items()}
     valid = {u for u in reference if categories.get(u) in ('valid_page', 'valid_json', 'valid_rsc')}
     base = sets['basecrawler']
+    base_method_urls = {(str(r.get('method') or 'GET').upper(), common.normalize_url(r.get('url') or ''))
+                        for r in data['basecrawler'] if candidate_is_crawlable(r)}
     # Final URL and identical HTML allow confirmed aliases only. JSON content
     # equality does not establish endpoint equivalence.
     base_finals = {cache[u].get('final_url') for u in base if u in cache and categories.get(u) in ('valid_page','valid_json')}
@@ -526,6 +546,15 @@ def verify_site(target, args):
     ratio = len(covered) / len(valid) if valid else None
     base_result_rows = jsonlines(site / 'basecrawler/results.jsonl')
     execution, dispatched_urls, successful_urls = reference_execution_metrics(valid, base_result_rows)
+    non_get_covered = non_get_reference & base_method_urls
+    all_method_valid = len(valid) + len(non_get_reference)
+    all_method_covered = len(covered) + len(non_get_covered)
+    all_method_discovery = all_method_covered / all_method_valid if all_method_valid else None
+    execution['successful_get_reference_coverage'] = execution['successful_reference_coverage']
+    execution['non_get_reference_targets'] = len(non_get_reference)
+    execution['non_get_discovered_targets'] = len(non_get_covered)
+    execution['non_get_discovery_coverage'] = len(non_get_covered) / len(non_get_reference) if non_get_reference else None
+    execution['all_method_discovery_coverage'] = all_method_discovery
     for detail in details:
         detail['verification_request_headers'] = cache[detail['url']].get('request_headers', {})
         detail['base_dispatched'] = detail['url'] in dispatched_urls
@@ -574,26 +603,31 @@ def verify_site(target, args):
             'confirmed_not_found_or_fallback': sum(sample_classes.get(name, 0) for name in ('not_found', 'html_fallback', 'soft_404')),
             'sample_urls': [{'url': url, 'classification': categories.get(url, 'unverified')} for url in urls_for_source],
         }
-    write_json(site/'metrics.json', {'modes':metrics, 'discovery_coverage':ratio,
-        'reference_execution':execution, 'strict_acceptance_version':'complete-crawl-v2',
+    write_json(site/'metrics.json', {'modes':metrics, 'discovery_coverage':all_method_discovery,
+        'reference_execution':execution, 'strict_acceptance_version':'complete-crawl-v3',
         'protocol_evidence_required':True,
         'reference_freshness':'historical frozen crawl; saved HTTP evidence may also be historical',
         'basecrawler_candidate_audit':candidate_audit})
-    strict_failures = strict_acceptance_failures(len(valid), ratio, unresolved, runs, execution)
+    strict_failures = strict_acceptance_failures(all_method_valid, all_method_discovery, unresolved, runs, execution)
     crawl_complete = runs['basecrawler'].get('crawl_completion', {}).get('complete') is True
     report = {'schema_version':2, 'protocol_aware':True, 'site': target.site_id, 'reference_candidates': len(reference), 'verified_valid_reference': len(valid),
-              'covered': len(covered), 'coverage': ratio, 'discovery_coverage': ratio,
+              'covered': len(covered), 'coverage': ratio, 'discovery_coverage': all_method_discovery,
+              'all_method_covered': all_method_covered, 'all_method_valid_reference_targets': all_method_valid,
               'dispatched_reference_urls': execution['dispatched_reference_urls'],
               'dispatched_reference_coverage': execution['dispatched_reference_coverage'],
               'successful_reference_urls': execution['successful_reference_urls'],
               'successful_reference_coverage': execution['successful_reference_coverage'],
               'successful_reference_missing': execution['successful_reference_missing'],
+              'non_get_reference_targets': len(non_get_reference),
+              'non_get_discovered_targets': len(non_get_covered),
+              'non_get_discovery_coverage': execution['non_get_discovery_coverage'],
+              'all_method_discovery_coverage': all_method_discovery,
               'crawl_complete': crawl_complete, 'strict_failure_reasons': strict_failures,
               'missing': missing, 'unresolved': unresolved,
               'verification_classes': dict(__import__('collections').Counter(categories.values())),
               'basecrawler_candidate_audit': candidate_audit,
               'runs': runs, 'passed': not strict_failures,
-              'discovery_coverage_passed': bool(valid) and ratio >= .95 and not unresolved,
+              'discovery_coverage_passed': bool(all_method_valid) and all_method_discovery >= .95 and not unresolved,
               'execution_coverage_passed': bool(valid) and execution['successful_reference_coverage'] is not None and execution['successful_reference_coverage'] >= .95,
               'note': 'Discovery, exact crawler dispatch, successful exact HTTP responses, and complete traversal are reported separately; aliases do not count as exact execution.'}
     write_json(site / 'effective.json', report)
@@ -610,8 +644,8 @@ def summarize(args, targets):
     passed = sum(r['passed'] for r in rows)
     goal = len(rows) == len(targets) and passed >= math.ceil(.8 * len(targets))
     write_json(args.output / 'acceptance.json', {'goal_met': goal, 'required_sites': len(targets), 'evaluated_sites': len(rows), 'passed_sites': passed,
-               'acceptance_version': 'complete-crawl-v2',
-               'criteria': '>=80% sites; per site >=95% discovery and exact successful GET coverage, no unresolved references, all tool runs completed, and Basecrawler crawl_completion.complete=true',
+               'acceptance_version': 'complete-crawl-v3',
+               'criteria': '>=80% sites; per site >=95% all-method discovery and exact successful GET coverage, no unresolved GET references, all tool runs completed, and Basecrawler crawl_completion.complete=true',
                'limitations': ['This does not certify all methods or runtime-only business flows.', 'Content equality proves HTML aliases only, not distinct API equivalence.']})
     lines = ['# Katana 双模式有效结果对比', '', '| 站点 | base秒 | Katana静态秒 | Katana浏览器秒 | 已核验有效参考 | 覆盖 | 待核验 | 静态/浏览器参考状态 | 达标 |', '|---|---:|---:|---:|---:|---:|---:|---|---|']
     for r in rows:
@@ -620,7 +654,7 @@ def summarize(args, targets):
         reference_status = '/'.join(r['runs'][m]['status'] for m in MODES[1:])
         lines.append('| ' + ' | '.join([r['site'], *seconds, str(r['verified_valid_reference']), coverage, str(len(r['unresolved'])), reference_status, str(r['passed'])]) + ' |')
     lines += ['', f'达标站点：{passed}/{len(targets)}；总目标达成：{goal}。', '', '只核验 GET 页面/JSON；方法、参数、模板及业务有效性另行验收。未核验、网络错误和浏览器失败不会被当成达标。', '启用 basecrawler --fsu；发现记录保留过滤前证据。参数值和数字 ID 不做武断归并，HTML 别名需响应证据。']
-    execution_lines = ['', '## Execution acceptance (complete-crawl-v2)', '',
+    execution_lines = ['', '## Execution acceptance (complete-crawl-v3)', '',
                        '| Site | Base c | Discovery | Exact successful GET | Crawl complete | Strict failure reasons |',
                        '|---|---:|---:|---:|---|---|']
     for r in rows:

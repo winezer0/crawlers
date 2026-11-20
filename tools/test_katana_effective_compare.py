@@ -161,18 +161,23 @@ class RunnerProfileTests(unittest.TestCase):
             binary = root / 'basecrawler.exe'
             binary.write_bytes(b'fixture')
             args = SimpleNamespace(
-                output=root / 'output', base=binary, depth=2, base_concurrency=4, base_rate_limit=9,
+                output=root / 'output', base=binary, depth=2, base_concurrency=4, base_rate_limit=9, base_seconds_limit=20, base_max_pages_per_host=300,
                 pages=20, rate=2, seconds=10, strategy='breadth-first', proxy='', resume=False,
             )
             target = SimpleNamespace(site_id='fixture', seed='https://example.test/', allowed_hosts=('example.test',))
-            with patch.object(compare.subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout='', stderr='')):
+            with patch.object(compare.subprocess, 'run', return_value=SimpleNamespace(returncode=0, stdout='', stderr='')) as run:
                 record = compare.run_one(target, 'basecrawler', args)
 
             command = json.loads((args.output / 'fixture' / 'basecrawler' / 'command.json').read_text(encoding='utf-8'))['command']
             self.assertEqual(command[command.index('-c') + 1], '4')
             self.assertEqual(command[command.index('--rl') + 1], '9')
+            self.assertEqual(command[command.index('--ct') + 1], '20s')
+            self.assertEqual(command[command.index('--mdp') + 1], '300')
             self.assertEqual(record['concurrency'], 4)
             self.assertEqual(record['rate_limit'], 9)
+            self.assertEqual(record['time_limit_seconds'], 20)
+            self.assertEqual(record['max_pages_per_host'], 300)
+            self.assertEqual(run.call_args.kwargs['timeout'], 80)
 
 
 class CandidateEvidenceTests(unittest.TestCase):

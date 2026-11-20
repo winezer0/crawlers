@@ -248,13 +248,18 @@ def candidates(folder, mode, target):
 def run_one(target, mode, args):
     folder = args.output / target.site_id / mode
     folder.mkdir(parents=True, exist_ok=True)
+    time_limit = args.seconds
     if mode == 'basecrawler':
         base_rate_limit = getattr(args, 'base_rate_limit', None)
         rate_limit = args.rate if base_rate_limit is None else base_rate_limit
+        base_seconds = getattr(args, 'base_seconds_limit', None)
+        time_limit = args.seconds if base_seconds is None else base_seconds
+        base_pages = getattr(args, 'base_max_pages_per_host', None)
+        page_limit = args.pages if base_pages is None else base_pages
         command = [str(args.base), '-u', target.seed, '-d', str(args.depth), '-c', str(getattr(args, 'base_concurrency', 1)),
-                   '--max-urls', str(BASE_MAX_URLS), '--mdp', str(args.pages),
+                   '--max-urls', str(BASE_MAX_URLS), '--mdp', str(page_limit),
                    '--timeout', '15', '--max-body', '16777216',
-                   '--scope', 'fqdn', '--rl', str(rate_limit), '--ct', str(args.seconds) + 's',
+                   '--scope', 'fqdn', '--rl', str(rate_limit), '--ct', str(time_limit) + 's',
                    '--no-fuzz', '--no-testfill', '--no-probe-openapi', '--fsu', '-s', 'all',
                    '--stable-host-order', '-v', '--discoveries', str(folder / 'discoveries.jsonl'),
                    '--report', str(folder / 'report.json'), '-o', str(folder / 'results.jsonl')]
@@ -281,7 +286,7 @@ def run_one(target, mode, args):
                'scope': target.allowed_hosts, 'started_at': time.strftime('%Y-%m-%dT%H:%M:%S%z')})
     started = time.monotonic()
     try:
-        r = subprocess.run(command, cwd=ROOT, capture_output=True, encoding='utf-8', errors='replace', timeout=args.seconds + 60)
+        r = subprocess.run(command, cwd=ROOT, capture_output=True, encoding='utf-8', errors='replace', timeout=time_limit + 60)
         status = 'completed' if r.returncode == 0 else 'failed'
         stdout, stderr, code = r.stdout, r.stderr, r.returncode
     except subprocess.TimeoutExpired as e:
@@ -310,6 +315,8 @@ def run_one(target, mode, args):
               'binary_sha256': binary_hash, 'crawl_completion': completion,
               'concurrency': getattr(args, 'base_concurrency', 1) if mode == 'basecrawler' else 1,
               'rate_limit': (getattr(args, 'base_rate_limit', None) if getattr(args, 'base_rate_limit', None) is not None else args.rate) if mode == 'basecrawler' else args.rate,
+              'time_limit_seconds': (getattr(args, 'base_seconds_limit', None) if getattr(args, 'base_seconds_limit', None) is not None else args.seconds) if mode == 'basecrawler' else args.seconds,
+              'max_pages_per_host': (getattr(args, 'base_max_pages_per_host', None) if getattr(args, 'base_max_pages_per_host', None) is not None else args.pages) if mode == 'basecrawler' else args.pages,
               'request_errors': sum(bool(r.get('error')) and r.get('error') != 'max depth reached' for r in raw_rows),
               'boundary_discoveries': sum(r.get('error') == 'max depth reached' for r in raw_rows)}
     write_json(folder / 'run.json', record)

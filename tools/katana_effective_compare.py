@@ -28,6 +28,9 @@ from crawler_metrics import protocol_headers, protocol_identity, is_rsc, equival
 ROOT = common.ROOT
 MODES = ('basecrawler', 'katana-static', 'katana-browser')
 ASSET = re.compile(r'\.(?:js|mjs|css|png|apng|avif|jpe?g|gif|svg|ico|webp|woff2?|ttf|map|mp[34]|pdf|zip)$', re.I)
+# Match Katana's per-host HTML-page cap separately from Basecrawler's total
+# request safety ceiling. A total-URL cap is not equivalent to Katana -mdp.
+BASE_MAX_URLS = 2000
 
 
 def usable_control(row):
@@ -133,7 +136,8 @@ def run_one(target, mode, args):
     folder.mkdir(parents=True, exist_ok=True)
     if mode == 'basecrawler':
         command = [str(args.base), '-u', target.seed, '-d', str(args.depth), '-c', '1',
-                   '--max-urls', str(args.pages), '--timeout', '15', '--max-body', '16777216',
+                   '--max-urls', str(BASE_MAX_URLS), '--mdp', str(args.pages),
+                   '--timeout', '15', '--max-body', '16777216',
                    '--scope', 'fqdn', '--rl', str(args.rate), '--ct', str(args.seconds) + 's',
                    '--no-fuzz', '--no-testfill', '--no-probe-openapi', '--fsu', '-s', 'all',
                    '--stable-host-order', '-v', '--discoveries', str(folder / 'discoveries.jsonl'),

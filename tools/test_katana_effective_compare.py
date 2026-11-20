@@ -142,6 +142,10 @@ class AcceptanceAndControlTests(unittest.TestCase):
         failures = compare.strict_acceptance_failures(10, 1.0, [], runs, execution)
 
         self.assertEqual(failures, ['basecrawler_crawl_incomplete'])
+        dimensions = compare.acceptance_dimensions(True, execution, False, failures)
+        self.assertTrue(dimensions['execution_coverage_passed'])
+        self.assertFalse(dimensions['crawl_completion_passed'])
+        self.assertFalse(dimensions['strict_passed'])
 
     def test_control_url_override_is_site_scoped_and_same_origin(self):
         target = SimpleNamespace(site_id='testasp', seed='https://example.test/start')

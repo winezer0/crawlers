@@ -23,7 +23,8 @@ from pathlib import Path
 from urllib.parse import urljoin, urlsplit
 
 import crawler_compare as common
-from crawler_metrics import protocol_headers, protocol_identity, is_rsc, equivalent_rsc, mode_metrics, gap_evidence
+from crawler_metrics import (protocol_headers, protocol_identity, is_rsc, equivalent_rsc,
+                              mode_metrics, gap_evidence, source_execution_metrics)
 
 ROOT = common.ROOT
 MODES = ('basecrawler', 'katana-static', 'katana-browser')
@@ -150,6 +151,16 @@ def strict_acceptance_failures(valid, discovery_coverage, unresolved, runs, exec
     if base_completion.get('complete') is not True:
         failures.append('basecrawler_crawl_incomplete')
     return failures
+
+
+def acceptance_dimensions(valid, execution, crawl_complete, strict_failures):
+    """Expose reference-target coverage separately from full crawl completion."""
+    coverage = execution.get('successful_reference_coverage')
+    return {
+        'execution_coverage_passed': bool(valid) and coverage is not None and coverage >= .95,
+        'crawl_completion_passed': crawl_complete is True,
+        'strict_passed': not strict_failures,
+    }
 
 
 def write_json(path, value):
@@ -610,6 +621,8 @@ def verify_site(target, args):
     (site / 'comparison.jsonl').write_text(''.join(json.dumps(r, ensure_ascii=False)+'\n' for r in details), encoding='utf-8')
     metrics = {m: mode_metrics(m, data[m], base_result_rows if m == 'basecrawler' else jsonlines(site/m/'results.jsonl'), runs[m]) for m in MODES}
     metrics['basecrawler']['reference_execution'] = execution
+    metrics['basecrawler']['source_execution'] = source_execution_metrics(
+        data['basecrawler'], completion, valid)
     base_pairs = {(r['method'], r['url']) for r in data['basecrawler']}
     crawlable_pairs = {(r['method'], r['url']) for r in data['basecrawler'] if candidate_is_crawlable(r)}
     metrics['basecrawler']['crawlable_discovered_method_urls'] = len(crawlable_pairs)
@@ -656,6 +669,7 @@ def verify_site(target, args):
         'basecrawler_candidate_audit':candidate_audit})
     strict_failures = strict_acceptance_failures(all_method_valid, all_method_discovery, unresolved, runs, execution)
     crawl_complete = runs['basecrawler'].get('crawl_completion', {}).get('complete') is True
+    dimensions = acceptance_dimensions(bool(valid), execution, crawl_complete, strict_failures)
     report = {'schema_version':2, 'protocol_aware':True, 'site': target.site_id, 'reference_candidates': len(reference), 'verified_valid_reference': len(valid),
               'covered': len(covered), 'coverage': ratio, 'discovery_coverage': all_method_discovery,
               'effective_reference_coverage': ratio,
@@ -673,13 +687,14 @@ def verify_site(target, args):
               'non_get_discovered_targets': len(non_get_covered),
               'non_get_discovery_coverage': execution['non_get_discovery_coverage'],
               'all_method_discovery_coverage': all_method_discovery,
-              'crawl_complete': crawl_complete, 'strict_failure_reasons': strict_failures,
+              'crawl_complete': crawl_complete, 'crawl_completion_passed': dimensions['crawl_completion_passed'],
+              'strict_passed': dimensions['strict_passed'], 'strict_failure_reasons': strict_failures,
               'missing': missing, 'unresolved': unresolved,
               'verification_classes': dict(__import__('collections').Counter(categories.values())),
               'basecrawler_candidate_audit': candidate_audit,
-              'runs': runs, 'passed': not strict_failures,
+              'runs': runs, 'passed': dimensions['strict_passed'],
               'discovery_coverage_passed': bool(all_method_valid) and all_method_discovery >= .95 and not unresolved,
-              'execution_coverage_passed': bool(valid) and execution['successful_reference_coverage'] is not None and execution['successful_reference_coverage'] >= .95,
+              'execution_coverage_passed': dimensions['execution_coverage_passed'],
               'note': 'Execution is scored from crawler request-attempt audit, independently of output deduplication. Requested and final URLs must match for an exact successful response; aliases do not count.'}
     write_json(site / 'effective.json', report)
     print(json.dumps({k: v for k, v in report.items() if k not in ('runs', 'missing', 'unresolved')}), flush=True)

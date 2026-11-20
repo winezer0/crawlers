@@ -5,7 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from katana_frozen_compare import freeze, select_maximum, validate_reference, run
+from katana_frozen_compare import freeze, select_maximum, validate_reference, run, summarize
 
 
 class FrozenReferenceTests(unittest.TestCase):
@@ -73,6 +73,74 @@ class FrozenReferenceTests(unittest.TestCase):
         self.assertEqual(config['base_max_pages_per_host'],300)
         self.assertEqual(config['base_depth_limit'],3)
         self.assertEqual(config['control_urls'],args.control_urls)
+
+    def test_summary_separates_reference_coverage_and_crawl_completion(self):
+        output = self.root / 'comparison'
+        site = output / 'round-01' / 'sample'
+        (site / 'basecrawler').mkdir(parents=True)
+        (site / 'effective.json').write_text(json.dumps({
+            'coverage': 1.0,
+            'discovery_coverage': 1.0,
+            'successful_reference_coverage': 0.96,
+            'execution_coverage_passed': True,
+            'crawl_complete': False,
+            'strict_passed': False,
+            'strict_failure_reasons': ['basecrawler_crawl_incomplete'],
+            'passed': False,
+            'missing': [],
+            'runs': {
+                'basecrawler': {'seconds': 180},
+                'katana-static': {'seconds': 60},
+                'katana-browser': {'seconds': 60},
+            },
+        }), encoding='utf-8')
+        (site / 'basecrawler' / 'candidates.json').write_text('[]', encoding='utf-8')
+        source_counts = {
+            'a': {
+                'discovered_method_urls': 20,
+                'scheduled_method_urls': 18,
+                'crawlable_method_urls': 20,
+                'dispatches': 18,
+                'successful_http_responses': 18,
+                'exact_successful_method_urls': 18,
+                'reference_targets_discovered': 10,
+                'scheduled_reference_targets': 10,
+                'reference_targets_attempted': 9,
+                'reference_targets_successful': 9,
+                'unvisited_by_reason': {'timeout': 2},
+            },
+        }
+        (site / 'metrics.json').write_text(json.dumps({
+            'modes': {'basecrawler': {
+                'seconds': 180,
+                'unvisited': 2,
+                'discovered_method_urls': 20,
+                'observed_successful_method_urls': 18,
+                'requests_attempted': 18,
+                'analysis_failures': 0,
+                'source_execution': source_counts,
+            }},
+            'reference_execution': {
+                'successful_reference_coverage': 0.96,
+                'non_get_discovered_targets': 1,
+                'non_get_reference_targets': 1,
+            },
+        }), encoding='utf-8')
+
+        result = summarize(
+            output, [SimpleNamespace(site_id='sample')], 1,
+            base_concurrency=4, base_rate_limit=2, base_seconds_limit=180,
+            base_max_pages_per_host=300,
+        )
+
+        self.assertEqual(result['reference_coverage_passed_sites'], 1)
+        self.assertEqual(result['crawl_complete_sites'], 0)
+        self.assertEqual(result['strict_passed_sites'], 0)
+        report = (output / 'summary.md').read_text(encoding='utf-8')
+        self.assertIn('GET >=95%', report)
+        self.assertIn('Crawl complete', report)
+        self.assertIn('Basecrawler source-level queue yield', report)
+        self.assertIn('| sample | 1 | a | 20 | 18 | 20 | 18 | 18 | 18 | 10 | 10 | 9 | 9 | timeout=2 |', report)
 
 
 if __name__=='__main__':unittest.main()

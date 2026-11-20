@@ -1,5 +1,5 @@
 import unittest
-from crawler_metrics import equivalent_rsc, mode_metrics
+from crawler_metrics import equivalent_rsc, mode_metrics, source_execution_metrics
 from katana_effective_compare import classify
 
 
@@ -70,6 +70,46 @@ class ProtocolMetricsTests(unittest.TestCase):
 
         self.assertEqual(metrics['observed_attempted_method_urls'], 3)
         self.assertEqual(metrics['observed_successful_method_urls'], 2)
+
+    def test_source_execution_metrics_separate_discovery_attempt_success_and_unvisited(self):
+        candidates = [
+            {'url': 'https://example.test/ref', 'method': 'GET', 'sources': ['a', 'llms.txt'],
+             'source_records': [{'source': 'a'}, {'source': 'llms.txt'}]},
+            {'url': 'https://example.test/clue', 'method': 'GET', 'sources': ['js-ast:goja'],
+             'source_records': [{'source': 'js-ast:goja', 'confidence': 'clue'}]},
+            {'url': 'https://example.test/pending', 'method': 'GET', 'sources': ['llms.txt'],
+             'source_records': [{'source': 'llms.txt'}]},
+        ]
+        completion = {
+            'requests': [
+                {'requested_url': 'https://example.test/ref', 'final_url': 'https://example.test/ref',
+                 'method': 'GET', 'source': 'a', 'http_status': 200, 'state': 'complete'},
+                {'requested_url': 'https://example.test/error', 'method': 'GET', 'source': 'script',
+                 'http_status': 500, 'state': 'failed', 'error': 'status 500'},
+                {'requested_url': 'https://example.test/redirect', 'final_url': 'https://example.test/final',
+                 'method': 'GET', 'source': 'link', 'http_status': 200, 'state': 'complete'},
+            ],
+            'unvisited': [
+                {'url': 'https://example.test/pending', 'method': 'GET', 'source': 'llms.txt', 'reason': 'timeout'},
+            ],
+        }
+
+        metrics = source_execution_metrics(candidates, completion, {'https://example.test/ref'})
+
+        self.assertEqual(metrics['a']['reference_targets_discovered'], 1)
+        self.assertEqual(metrics['a']['scheduled_method_urls'], 1)
+        self.assertEqual(metrics['a']['scheduled_reference_targets'], 1)
+        self.assertEqual(metrics['a']['reference_targets_attempted'], 1)
+        self.assertEqual(metrics['a']['reference_targets_successful'], 1)
+        self.assertEqual(metrics['llms.txt']['reference_targets_discovered'], 1)
+        self.assertEqual(metrics['llms.txt']['scheduled_method_urls'], 1)
+        self.assertEqual(metrics['llms.txt']['dispatches'], 0)
+        self.assertEqual(metrics['llms.txt']['unvisited_by_reason'], {'timeout': 1})
+        self.assertEqual(metrics['js-ast:goja']['crawlable_method_urls'], 0)
+        self.assertEqual(metrics['script']['dispatches'], 1)
+        self.assertEqual(metrics['script']['successful_http_responses'], 0)
+        self.assertEqual(metrics['link']['successful_http_responses'], 1)
+        self.assertEqual(metrics['link']['exact_successful_method_urls'], 0)
 
 
 if __name__=='__main__': unittest.main()

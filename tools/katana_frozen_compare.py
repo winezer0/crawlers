@@ -97,7 +97,9 @@ def summarize(output, targets, rounds, base_concurrency=1, base_rate_limit=None,
         sites.append({'site': target.site_id, 'coverage': [r['coverage'] for r in reports],
                       'discovery_coverage': [r.get('discovery_coverage', r['coverage']) for r in reports],
                       'successful_reference_coverage': [r.get('successful_reference_coverage') for r in reports],
+                      'execution_coverage_passed': [r.get('execution_coverage_passed', False) for r in reports],
                       'crawl_complete': [r.get('crawl_complete', False) for r in reports],
+                      'strict_passed': [r.get('strict_passed', r.get('passed', False)) for r in reports],
                       'strict_failure_reasons': [r.get('strict_failure_reasons', []) for r in reports],
                       'metrics': [read(output / f'round-{n:02}' / target.site_id / 'metrics.json')
                                   for n in range(1, rounds + 1)
@@ -119,6 +121,10 @@ def summarize(output, targets, rounds, base_concurrency=1, base_rate_limit=None,
               'base_depth_limit': base_depth_limit,
               'passed_sites': sum(s['passed'] for s in sites), 'rounds': rounds,
               'goal_met': sum(s['passed'] for s in sites) >= math.ceil(.8 * len(sites)),
+              'reference_coverage_passed_sites': sum(all(s['execution_coverage_passed']) for s in sites),
+              'reference_coverage_goal_met': sum(all(s['execution_coverage_passed']) for s in sites) >= math.ceil(.8 * len(sites)),
+              'crawl_complete_sites': sum(all(s['crawl_complete']) for s in sites),
+              'strict_passed_sites': sum(all(s['strict_passed']) for s in sites),
               'reference_policy': 'frozen single maximum per site/mode; no Katana process executed',
               'limitations': ['Reference times are historical single runs; base times are new bounded-budget runs.',
                               'Saved HTTP evidence is reused. This does not measure fresh reference-site availability.']}
@@ -136,8 +142,8 @@ def summarize(output, targets, rounds, base_concurrency=1, base_rate_limit=None,
             m = metric['modes']['basecrawler']
             lines.append(f"| {s['site']} | {n} | {m['discovered_method_urls']} | {m['observed_successful_method_urls']} | {m['requests_attempted']} | {m['analysis_failures']} | {m['unvisited']} | {m['seconds']:.2f} |")
     lines += ['', '## Discovery, request execution, and completion', '',
-              '| Site | Base c | Base depth | Base QPS limit | Base time limit (s) | Base page cap | Round | All-method discovery | Non-GET targets found | Exact successful GET | Crawl complete | Unvisited | Strict failure reasons |',
-              '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---|']
+              '| Site | Base c | Base depth | Base QPS limit | Base time limit (s) | Base page cap | Round | All-method discovery | Non-GET targets found | Exact successful GET | GET >=95% | Crawl complete | Strict pass | Unvisited | Strict failure reasons |',
+              '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---|---:|---|']
     for s in sites:
         for n, metric in enumerate(s['metrics'], 1):
             m = metric['modes']['basecrawler']
@@ -148,9 +154,22 @@ def summarize(output, targets, rounds, base_concurrency=1, base_rate_limit=None,
             success_text = f'{success:.2%}' if success is not None else 'n/a'
             non_get = f"{execution.get('non_get_discovered_targets', 0)}/{execution.get('non_get_reference_targets', 0)}"
             failures = s['strict_failure_reasons'][n-1] if n-1 < len(s['strict_failure_reasons']) else []
-            lines.append(f"| {s['site']} | {s['base_concurrency']} | {s['base_depth_limit'] if s['base_depth_limit'] is not None else 'reference'} | {s['base_rate_limit'] if s['base_rate_limit'] is not None else 'reference'} | {s['base_seconds_limit'] if s['base_seconds_limit'] is not None else 'reference'} | {s['base_max_pages_per_host'] if s['base_max_pages_per_host'] is not None else 'reference'} | {n} | {discovery_text} | {non_get} | {success_text} | {s['crawl_complete'][n-1]} | {m['unvisited']} | {', '.join(failures) or 'none'} |")
+            lines.append(f"| {s['site']} | {s['base_concurrency']} | {s['base_depth_limit'] if s['base_depth_limit'] is not None else 'reference'} | {s['base_rate_limit'] if s['base_rate_limit'] is not None else 'reference'} | {s['base_seconds_limit'] if s['base_seconds_limit'] is not None else 'reference'} | {s['base_max_pages_per_host'] if s['base_max_pages_per_host'] is not None else 'reference'} | {n} | {discovery_text} | {non_get} | {success_text} | {s['execution_coverage_passed'][n-1]} | {s['crawl_complete'][n-1]} | {s['strict_passed'][n-1]} | {m['unvisited']} | {', '.join(failures) or 'none'} |")
+    lines += ['', f"Reference execution >=95% sites: {result['reference_coverage_passed_sites']}/{len(sites)}; "
+              f"fully completed crawls: {result['crawl_complete_sites']}/{len(sites)}; "
+              f"strict passes: {result['strict_passed_sites']}/{len(sites)}."]
     lines += ['', 'Katana network totals and JavaScript analysis failures are unknown, not zero. See each site metrics.json for separate static/browser reference coverage.',
               'RSC verification replays observed protocol headers; ordinary HTML GET cannot certify a Flight response. Cache-token aliases require matching context and response hashes.']
+    lines += ['', '## Basecrawler source-level queue yield', '',
+              '| Site | Round | Source | Discovered candidates | Scheduled | Crawlable candidates | Dispatches | HTTP 2xx responses | Exact URL successes | Valid reference found | Valid reference scheduled | Valid reference attempted | Valid reference success | Unvisited reasons |',
+              '|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|']
+    for s in sites:
+        for n, metric in enumerate(s['metrics'], 1):
+            source_rows = metric.get('modes', {}).get('basecrawler', {}).get('source_execution', {})
+            for source, counts in sorted(source_rows.items()):
+                reasons = ', '.join(f'{reason}={count}' for reason, count in sorted(counts['unvisited_by_reason'].items())) or 'none'
+                lines.append(f"| {s['site']} | {n} | {source} | {counts['discovered_method_urls']} | {counts['scheduled_method_urls']} | {counts['crawlable_method_urls']} | {counts['dispatches']} | {counts['successful_http_responses']} | {counts['exact_successful_method_urls']} | {counts['reference_targets_discovered']} | {counts['scheduled_reference_targets']} | {counts['reference_targets_attempted']} | {counts['reference_targets_successful']} | {reasons} |")
+    lines += ['', 'Per-source discovery counts overlap when the same method/URL has multiple provenance records. Scheduled counts are the union of dispatched and still-unvisited method/URLs. Dispatches count crawler-level requests; bootstrap, retry, and redirect hops are excluded.']
     (output / 'summary.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
     return result
 

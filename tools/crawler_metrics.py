@@ -82,6 +82,111 @@ def mode_metrics(mode, candidates, rows, run):
             'run_status': run['status']}
 
 
+def source_execution_metrics(candidates, completion, valid_reference_urls=()):
+    """Break Basecrawler discovery and request execution down by provenance."""
+    from crawler_compare import normalize_url
+
+    valid = set(valid_reference_urls)
+    stats = {}
+
+    def entry(source):
+        return stats.setdefault(source, {
+            'discovered_method_urls': set(),
+            'crawlable_method_urls': set(),
+            'reference_targets_discovered': set(),
+            'scheduled_method_urls': set(),
+            'scheduled_reference_targets': set(),
+            'dispatches': 0,
+            'attempted_method_urls': set(),
+            'successful_http_responses': 0,
+            'exact_successful_method_urls': set(),
+            'successful_method_urls': set(),
+            'reference_targets_attempted': set(),
+            'reference_targets_successful': set(),
+            'unvisited_method_urls': set(),
+            'unvisited_by_reason': Counter(),
+        })
+
+    for row in candidates:
+        method = str(row.get('method') or 'GET').upper()
+        url = normalize_url(row.get('url') or '')
+        if not url:
+            continue
+        pair = (method, url)
+        records = row.get('source_records') or []
+        if records:
+            by_source = {}
+            for record in records:
+                source = record.get('source') or 'unknown'
+                by_source.setdefault(source, []).append(record)
+        else:
+            sources = row.get('sources') or [row.get('source') or 'unknown']
+            by_source = {source: [{'confidence': row.get('confidence', '')}] for source in sources}
+        for source, source_records in by_source.items():
+            item = entry(source)
+            item['discovered_method_urls'].add(pair)
+            confidences = [str(record.get('confidence') or '').lower() for record in source_records]
+            if any(confidence not in ('clue', 'template') for confidence in confidences):
+                item['crawlable_method_urls'].add(pair)
+            if method == 'GET' and url in valid:
+                item['reference_targets_discovered'].add(url)
+
+    for request in completion.get('requests') or []:
+        source = request.get('source') or 'unknown'
+        item = entry(source)
+        method = str(request.get('method') or 'GET').upper()
+        url = normalize_url(request.get('requested_url') or '')
+        if not url:
+            continue
+        pair = (method, url)
+        item['dispatches'] += 1
+        item['scheduled_method_urls'].add(pair)
+        item['attempted_method_urls'].add(pair)
+        if method == 'GET' and url in valid:
+            item['scheduled_reference_targets'].add(url)
+            item['reference_targets_attempted'].add(url)
+        status = int(request.get('http_status') or 0)
+        final_url = normalize_url(request.get('final_url') or url)
+        response_success = (200 <= status < 300 and not request.get('error')
+                            and request.get('state', 'complete') == 'complete')
+        if response_success:
+            item['successful_http_responses'] += 1
+        if response_success and final_url == url:
+            item['exact_successful_method_urls'].add(pair)
+            item['successful_method_urls'].add(pair)
+            if method == 'GET' and url in valid:
+                item['reference_targets_successful'].add(url)
+
+    for row in completion.get('unvisited') or []:
+        source = row.get('source') or 'unknown'
+        item = entry(source)
+        method = str(row.get('method') or 'GET').upper()
+        url = normalize_url(row.get('url') or '')
+        if url:
+            pair = (method, url)
+            item['scheduled_method_urls'].add(pair)
+            item['unvisited_method_urls'].add(pair)
+            if method == 'GET' and url in valid:
+                item['scheduled_reference_targets'].add(url)
+        item['unvisited_by_reason'][row.get('reason') or 'unknown'] += 1
+
+    result = {}
+    set_fields = (
+        'discovered_method_urls', 'crawlable_method_urls', 'reference_targets_discovered',
+        'scheduled_method_urls', 'scheduled_reference_targets',
+        'attempted_method_urls', 'successful_method_urls', 'reference_targets_attempted',
+        'reference_targets_successful', 'unvisited_method_urls',
+    )
+    for source, item in sorted(stats.items()):
+        output = {key: len(item[key]) for key in set_fields}
+        output['dispatches'] = item['dispatches']
+        output['successful_http_responses'] = item['successful_http_responses']
+        output['exact_successful_method_urls'] = len(item['exact_successful_method_urls'])
+        output['unvisited_by_reason'] = dict(sorted(item['unvisited_by_reason'].items()))
+        result[source] = output
+    return result
+
+
 def gap_evidence(url, data, base_run, base_rows):
     pending = {r['url']:r for r in base_run.get('crawl_completion', {}).get('unvisited', [])}
     parents = sorted({r.get('referer') for m in ('katana-static','katana-browser')

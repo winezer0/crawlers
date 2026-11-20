@@ -42,6 +42,18 @@ class ClassificationTests(unittest.TestCase):
 
 
 class AcceptanceAndControlTests(unittest.TestCase):
+    def test_discovery_coverage_requires_exact_method_and_url_not_alias(self):
+        urls = {'https://example.test/a', 'https://example.test/b'}
+        non_get = {('POST', 'https://example.test/action')}
+        base = {('GET', 'https://example.test/a'), ('GET', 'https://example.test/alias'),
+                ('POST', 'https://example.test/action')}
+
+        metrics = compare.method_aware_discovery_metrics(urls, non_get, base)
+
+        self.assertEqual(metrics['valid_targets'], 3)
+        self.assertEqual(metrics['discovered_targets'], 2)
+        self.assertEqual(metrics['coverage'], 2 / 3)
+
     def test_observed_non_get_reference_is_a_method_aware_discovery_target(self):
         with tempfile.TemporaryDirectory() as temporary:
             site = Path(temporary)

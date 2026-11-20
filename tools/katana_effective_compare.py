@@ -103,6 +103,23 @@ def observed_non_get_targets(site, modes, target_rows):
     return observed & candidates
 
 
+def method_aware_discovery_metrics(valid_get_urls, non_get_targets, base_method_urls):
+    valid_get = {common.normalize_url(url) for url in valid_get_urls}
+    exact_get = valid_get & {url for method, url in base_method_urls if method == 'GET'}
+    non_get_found = set(non_get_targets) & set(base_method_urls)
+    denominator = len(valid_get) + len(non_get_targets)
+    found = len(exact_get) + len(non_get_found)
+    return {
+        'valid_targets': denominator,
+        'discovered_targets': found,
+        'coverage': found / denominator if denominator else None,
+        'exact_get_targets': len(valid_get),
+        'exact_get_discovered': len(exact_get),
+        'non_get_targets': len(non_get_targets),
+        'non_get_discovered': len(non_get_found),
+    }
+
+
 def strict_acceptance_failures(valid, discovery_coverage, unresolved, runs, execution):
     failures = []
     if not valid:
@@ -546,10 +563,11 @@ def verify_site(target, args):
     ratio = len(covered) / len(valid) if valid else None
     base_result_rows = jsonlines(site / 'basecrawler/results.jsonl')
     execution, dispatched_urls, successful_urls = reference_execution_metrics(valid, base_result_rows)
+    discovery_metrics = method_aware_discovery_metrics(valid, non_get_reference, base_method_urls)
     non_get_covered = non_get_reference & base_method_urls
-    all_method_valid = len(valid) + len(non_get_reference)
-    all_method_covered = len(covered) + len(non_get_covered)
-    all_method_discovery = all_method_covered / all_method_valid if all_method_valid else None
+    all_method_valid = discovery_metrics['valid_targets']
+    all_method_covered = discovery_metrics['discovered_targets']
+    all_method_discovery = discovery_metrics['coverage']
     execution['successful_get_reference_coverage'] = execution['successful_reference_coverage']
     execution['non_get_reference_targets'] = len(non_get_reference)
     execution['non_get_discovered_targets'] = len(non_get_covered)
@@ -559,6 +577,7 @@ def verify_site(target, args):
         detail['verification_request_headers'] = cache[detail['url']].get('request_headers', {})
         detail['base_dispatched'] = detail['url'] in dispatched_urls
         detail['base_successful'] = detail['url'] in successful_urls
+        detail['base_discovered'] = ('GET', common.normalize_url(detail['url'])) in base_method_urls
         if not detail['base_covered']:
             detail['gap_evidence'] = gap_evidence(detail['url'], data, runs['basecrawler'], base_result_rows)
     (site / 'comparison.jsonl').write_text(''.join(json.dumps(r, ensure_ascii=False)+'\n' for r in details), encoding='utf-8')
@@ -612,7 +631,12 @@ def verify_site(target, args):
     crawl_complete = runs['basecrawler'].get('crawl_completion', {}).get('complete') is True
     report = {'schema_version':2, 'protocol_aware':True, 'site': target.site_id, 'reference_candidates': len(reference), 'verified_valid_reference': len(valid),
               'covered': len(covered), 'coverage': ratio, 'discovery_coverage': all_method_discovery,
+              'effective_reference_coverage': ratio,
+              'exact_get_discovery_coverage': (discovery_metrics['exact_get_discovered'] / discovery_metrics['exact_get_targets']
+                                               if discovery_metrics['exact_get_targets'] else None),
               'all_method_covered': all_method_covered, 'all_method_valid_reference_targets': all_method_valid,
+              'exact_get_discovered': discovery_metrics['exact_get_discovered'],
+              'exact_get_reference_targets': discovery_metrics['exact_get_targets'],
               'dispatched_reference_urls': execution['dispatched_reference_urls'],
               'dispatched_reference_coverage': execution['dispatched_reference_coverage'],
               'successful_reference_urls': execution['successful_reference_urls'],

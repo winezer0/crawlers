@@ -256,7 +256,9 @@ def run_one(target, mode, args):
         time_limit = args.seconds if base_seconds is None else base_seconds
         base_pages = getattr(args, 'base_max_pages_per_host', None)
         page_limit = args.pages if base_pages is None else base_pages
-        command = [str(args.base), '-u', target.seed, '-d', str(args.depth), '-c', str(getattr(args, 'base_concurrency', 1)),
+        base_depth = getattr(args, 'base_depth_limit', None)
+        depth_limit = args.depth if base_depth is None else base_depth
+        command = [str(args.base), '-u', target.seed, '-d', str(depth_limit), '-c', str(getattr(args, 'base_concurrency', 1)),
                    '--max-urls', str(BASE_MAX_URLS), '--mdp', str(page_limit),
                    '--timeout', '15', '--max-body', '16777216',
                    '--scope', 'fqdn', '--rl', str(rate_limit), '--ct', str(time_limit) + 's',
@@ -317,6 +319,7 @@ def run_one(target, mode, args):
               'rate_limit': (getattr(args, 'base_rate_limit', None) if getattr(args, 'base_rate_limit', None) is not None else args.rate) if mode == 'basecrawler' else args.rate,
               'time_limit_seconds': (getattr(args, 'base_seconds_limit', None) if getattr(args, 'base_seconds_limit', None) is not None else args.seconds) if mode == 'basecrawler' else args.seconds,
               'max_pages_per_host': (getattr(args, 'base_max_pages_per_host', None) if getattr(args, 'base_max_pages_per_host', None) is not None else args.pages) if mode == 'basecrawler' else args.pages,
+               'max_depth': (getattr(args, 'base_depth_limit', None) if getattr(args, 'base_depth_limit', None) is not None else args.depth) if mode == 'basecrawler' else args.depth,
               'request_errors': sum(bool(r.get('error')) and r.get('error') != 'max depth reached' for r in raw_rows),
               'boundary_discoveries': sum(r.get('error') == 'max depth reached' for r in raw_rows)}
     write_json(folder / 'run.json', record)

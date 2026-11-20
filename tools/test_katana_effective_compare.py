@@ -161,7 +161,7 @@ class RunnerProfileTests(unittest.TestCase):
             binary = root / 'basecrawler.exe'
             binary.write_bytes(b'fixture')
             args = SimpleNamespace(
-                output=root / 'output', base=binary, depth=2, base_concurrency=4, base_rate_limit=9, base_seconds_limit=20, base_max_pages_per_host=300,
+                output=root / 'output', base=binary, depth=2, base_depth_limit=3, base_concurrency=4, base_rate_limit=9, base_seconds_limit=20, base_max_pages_per_host=300,
                 pages=20, rate=2, seconds=10, strategy='breadth-first', proxy='', resume=False,
             )
             target = SimpleNamespace(site_id='fixture', seed='https://example.test/', allowed_hosts=('example.test',))
@@ -173,10 +173,12 @@ class RunnerProfileTests(unittest.TestCase):
             self.assertEqual(command[command.index('--rl') + 1], '9')
             self.assertEqual(command[command.index('--ct') + 1], '20s')
             self.assertEqual(command[command.index('--mdp') + 1], '300')
+            self.assertEqual(command[command.index('-d') + 1], '3')
             self.assertEqual(record['concurrency'], 4)
             self.assertEqual(record['rate_limit'], 9)
             self.assertEqual(record['time_limit_seconds'], 20)
             self.assertEqual(record['max_pages_per_host'], 300)
+            self.assertEqual(record['max_depth'], 3)
             self.assertEqual(run.call_args.kwargs['timeout'], 80)
 
 

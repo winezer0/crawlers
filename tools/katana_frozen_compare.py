@@ -87,7 +87,7 @@ def validate_reference(reference):
     return manifest
 
 
-def summarize(output, targets, rounds, base_concurrency=1, base_rate_limit=None, base_seconds_limit=None, base_max_pages_per_host=None):
+def summarize(output, targets, rounds, base_concurrency=1, base_rate_limit=None, base_seconds_limit=None, base_max_pages_per_host=None, base_depth_limit=None):
     sites = []
     for target in targets:
         reports = [read(output / f'round-{n:02}' / target.site_id / 'effective.json') for n in range(1, rounds + 1)]
@@ -107,6 +107,7 @@ def summarize(output, targets, rounds, base_concurrency=1, base_rate_limit=None,
                        'base_rate_limit': base_rate_limit,
                        'base_seconds_limit': base_seconds_limit,
                        'base_max_pages_per_host': base_max_pages_per_host,
+                       'base_depth_limit': base_depth_limit,
                       'reference_seconds': {m: reports[0]['runs'][m]['seconds'] for m in bench.MODES[1:]},
                       'base_stability': stability, 'missing': [r['missing'] for r in reports],
                       'passed': rounds >= 3 and stability >= .9 and all(r['passed'] for r in reports)})
@@ -115,6 +116,7 @@ def summarize(output, targets, rounds, base_concurrency=1, base_rate_limit=None,
               'base_rate_limit': base_rate_limit,
               'base_seconds_limit': base_seconds_limit,
               'base_max_pages_per_host': base_max_pages_per_host,
+              'base_depth_limit': base_depth_limit,
               'passed_sites': sum(s['passed'] for s in sites), 'rounds': rounds,
               'goal_met': sum(s['passed'] for s in sites) >= math.ceil(.8 * len(sites)),
               'reference_policy': 'frozen single maximum per site/mode; no Katana process executed',
@@ -134,8 +136,8 @@ def summarize(output, targets, rounds, base_concurrency=1, base_rate_limit=None,
             m = metric['modes']['basecrawler']
             lines.append(f"| {s['site']} | {n} | {m['discovered_method_urls']} | {m['observed_successful_method_urls']} | {m['requests_attempted']} | {m['analysis_failures']} | {m['unvisited']} | {m['seconds']:.2f} |")
     lines += ['', '## Discovery, request execution, and completion', '',
-              '| Site | Base c | Base QPS limit | Base time limit (s) | Base page cap | Round | All-method discovery | Non-GET targets found | Exact successful GET | Crawl complete | Unvisited | Strict failure reasons |',
-              '|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---|']
+              '| Site | Base c | Base depth | Base QPS limit | Base time limit (s) | Base page cap | Round | All-method discovery | Non-GET targets found | Exact successful GET | Crawl complete | Unvisited | Strict failure reasons |',
+              '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---|']
     for s in sites:
         for n, metric in enumerate(s['metrics'], 1):
             m = metric['modes']['basecrawler']
@@ -146,7 +148,7 @@ def summarize(output, targets, rounds, base_concurrency=1, base_rate_limit=None,
             success_text = f'{success:.2%}' if success is not None else 'n/a'
             non_get = f"{execution.get('non_get_discovered_targets', 0)}/{execution.get('non_get_reference_targets', 0)}"
             failures = s['strict_failure_reasons'][n-1] if n-1 < len(s['strict_failure_reasons']) else []
-            lines.append(f"| {s['site']} | {s['base_concurrency']} | {s['base_rate_limit'] if s['base_rate_limit'] is not None else 'reference'} | {s['base_seconds_limit'] if s['base_seconds_limit'] is not None else 'reference'} | {s['base_max_pages_per_host'] if s['base_max_pages_per_host'] is not None else 'reference'} | {n} | {discovery_text} | {non_get} | {success_text} | {s['crawl_complete'][n-1]} | {m['unvisited']} | {', '.join(failures) or 'none'} |")
+            lines.append(f"| {s['site']} | {s['base_concurrency']} | {s['base_depth_limit'] if s['base_depth_limit'] is not None else 'reference'} | {s['base_rate_limit'] if s['base_rate_limit'] is not None else 'reference'} | {s['base_seconds_limit'] if s['base_seconds_limit'] is not None else 'reference'} | {s['base_max_pages_per_host'] if s['base_max_pages_per_host'] is not None else 'reference'} | {n} | {discovery_text} | {non_get} | {success_text} | {s['crawl_complete'][n-1]} | {m['unvisited']} | {', '.join(failures) or 'none'} |")
     lines += ['', 'Katana network totals and JavaScript analysis failures are unknown, not zero. See each site metrics.json for separate static/browser reference coverage.',
               'RSC verification replays observed protocol headers; ordinary HTML GET cannot certify a Flight response. Cache-token aliases require matching context and response hashes.']
     (output / 'summary.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
@@ -172,6 +174,9 @@ def run(args):
     base_max_pages_per_host = getattr(args, 'base_max_pages_per_host', None)
     if base_max_pages_per_host is not None and base_max_pages_per_host < 0:
         raise ValueError('Basecrawler page cap must be zero (unlimited) or positive')
+    base_depth_limit = getattr(args, 'base_depth_limit', None)
+    if base_depth_limit is not None and base_depth_limit < 0:
+        raise ValueError('Basecrawler depth must be zero (unlimited) or positive')
     control_urls = getattr(args, 'control_urls', {})
     config = {'reference': str(args.reference.resolve()), 'reference_sha256': digest(args.reference / 'frozen.json'),
               'scoring_sha256':scoring_fingerprint(),
@@ -179,6 +184,7 @@ def run(args):
               'rounds': args.rounds, 'base_concurrency': base_concurrency,
               'base_rate_limit': base_rate_limit, 'base_seconds_limit': base_seconds_limit,
               'base_max_pages_per_host': base_max_pages_per_host,
+              'base_depth_limit': base_depth_limit,
               'control_urls': control_urls}
     if (args.output / 'config.json').exists():
         if not args.resume or read(args.output / 'config.json') != config:
@@ -192,6 +198,7 @@ def run(args):
                                       base_concurrency=base_concurrency, base_rate_limit=base_rate_limit,
                                       base_seconds_limit=base_seconds_limit,
                                       base_max_pages_per_host=base_max_pages_per_host,
+                                       base_depth_limit=base_depth_limit,
                                       control_urls=control_urls,
                                       verify_timeout=12, verify_workers=4, verify_limit=0)
             folder = options.output / site
@@ -205,7 +212,7 @@ def run(args):
             bench.verify_site(target, options)
         with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as pool:
             list(pool.map(run_site, targets))
-    summarize(args.output, targets, args.rounds, base_concurrency, base_rate_limit, base_seconds_limit, base_max_pages_per_host)
+    summarize(args.output, targets, args.rounds, base_concurrency, base_rate_limit, base_seconds_limit, base_max_pages_per_host, base_depth_limit)
 
 
 def compare_saved(args):
@@ -240,7 +247,8 @@ def compare_saved(args):
         first_run = read(next(iter(sites.values()))[0] / 'basecrawler' / 'run.json')
         summarize(args.output, [bench.common.TARGETS[site] for site in sorted(sites)], rounds,
                   first_run.get('concurrency', 1), first_run.get('rate_limit'),
-                  first_run.get('time_limit_seconds'), first_run.get('max_pages_per_host'))
+                  first_run.get('time_limit_seconds'), first_run.get('max_pages_per_host'),
+                  first_run.get('max_depth'))
 
 
 if __name__ == '__main__':
@@ -257,6 +265,8 @@ if __name__ == '__main__':
                    help='Basecrawler crawl duration in seconds; defaults to the frozen Katana duration.')
     r.add_argument('--base-max-pages-per-host', type=int, default=None,
                    help='Basecrawler page cap per host; defaults to the frozen Katana setting. Use 0 for unlimited.')
+    r.add_argument('--base-depth-limit', type=int, default=None,
+                    help='Basecrawler depth; defaults to the frozen Katana depth. Use 0 for unlimited.')
     r.add_argument('--control-url', action='append', default=[], metavar='SITE_ID=URL')
     r.add_argument('--resume', action='store_true'); r.add_argument('--verify-only', action='store_true')
     c = sub.add_parser('compare-saved'); c.add_argument('--reference', type=Path, required=True)

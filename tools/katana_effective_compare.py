@@ -483,6 +483,14 @@ def classify(row, control):
         return 'not_found'
     if code in (401, 403, 429):
         return 'restricted_or_blocked'
+    if (500 <= code < 600
+            and 'html' in str(row.get('content_type') or '').lower()
+            and row.get('sha256')
+            and row.get('sha256') == control.get('sha256')
+            and not row.get('error')
+            and not row.get('truncated')
+            and usable_control(control)):
+        return 'html_fallback'
     if code < 200 or code >= 400:
         return 'unconfirmed'
     if row.get('truncated'):

@@ -52,6 +52,20 @@ class ClassificationTests(unittest.TestCase):
         row['sha256'] = 'page'
         self.assertEqual(compare.classify(row, control), 'unconfirmed_control')
 
+    def test_matching_html_server_error_is_the_control_fallback(self):
+        row = self.row()
+        row.update(status=500, content_type='text/html', sha256='server-error-page')
+        control = {'status': 500, 'content_type': 'text/html', 'sha256': 'server-error-page'}
+
+        self.assertEqual(compare.classify(row, control), 'html_fallback')
+
+        row['sha256'] = 'different-error-page'
+        self.assertEqual(compare.classify(row, control), 'unconfirmed')
+
+        row['sha256'] = control['sha256']
+        row['truncated'] = True
+        self.assertEqual(compare.classify(row, control), 'unconfirmed')
+
 
 class AcceptanceAndControlTests(unittest.TestCase):
     def test_discovery_coverage_requires_exact_method_and_url_not_alias(self):

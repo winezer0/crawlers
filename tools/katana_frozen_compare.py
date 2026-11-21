@@ -97,6 +97,7 @@ def summarize(output, targets, rounds, base_concurrency=1, base_rate_limit=None,
         sites.append({'site': target.site_id, 'coverage': [r['coverage'] for r in reports],
                       'discovery_coverage': [r.get('discovery_coverage', r['coverage']) for r in reports],
                       'successful_reference_coverage': [r.get('successful_reference_coverage') for r in reports],
+                      'excluded_non_get_telemetry': [r.get('excluded_non_get_telemetry', []) for r in reports],
                       'execution_coverage_passed': [r.get('execution_coverage_passed', False) for r in reports],
                       'crawl_complete': [r.get('crawl_complete', False) for r in reports],
                       'strict_passed': [r.get('strict_passed', r.get('passed', False)) for r in reports],
@@ -146,8 +147,8 @@ def summarize(output, targets, rounds, base_concurrency=1, base_rate_limit=None,
             m = metric['modes']['basecrawler']
             lines.append(f"| {s['site']} | {n} | {m['discovered_method_urls']} | {m['observed_successful_method_urls']} | {m['requests_attempted']} | {m['analysis_failures']} | {m['unvisited']} | {m.get('not_scheduled', 0)} | {m['seconds']:.2f} |")
     lines += ['', '## Discovery, request execution, and completion', '',
-              '| Site | Base c | Base depth | Base QPS limit | Base time limit (s) | Base page cap | Round | All-method discovery | Non-GET targets found | Exact successful GET | GET >=95% | Crawl complete | Strict pass | Unvisited | Strict failure reasons |',
-              '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---|---:|---|']
+              '| Site | Base c | Base depth | Base QPS limit | Base time limit (s) | Base page cap | Round | All-method discovery | App non-GET found/targets | Telemetry excluded | Exact successful GET | GET >=95% | Crawl complete | Strict pass | Unvisited | Strict failure reasons |',
+              '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---|---:|---|']
     for s in sites:
         for n, metric in enumerate(s['metrics'], 1):
             m = metric['modes']['basecrawler']
@@ -157,11 +158,23 @@ def summarize(output, targets, rounds, base_concurrency=1, base_rate_limit=None,
             discovery_text = f'{discovery:.2%}' if discovery is not None else 'n/a'
             success_text = f'{success:.2%}' if success is not None else 'n/a'
             non_get = f"{execution.get('non_get_discovered_targets', 0)}/{execution.get('non_get_reference_targets', 0)}"
+            telemetry_excluded = str(execution.get('excluded_non_get_telemetry_targets', 0))
             failures = s['strict_failure_reasons'][n-1] if n-1 < len(s['strict_failure_reasons']) else []
-            lines.append(f"| {s['site']} | {s['base_concurrency']} | {s['base_depth_limit'] if s['base_depth_limit'] is not None else 'reference'} | {s['base_rate_limit'] if s['base_rate_limit'] is not None else 'reference'} | {s['base_seconds_limit'] if s['base_seconds_limit'] is not None else 'reference'} | {s['base_max_pages_per_host'] if s['base_max_pages_per_host'] is not None else 'reference'} | {n} | {discovery_text} | {non_get} | {success_text} | {s['execution_coverage_passed'][n-1]} | {s['crawl_complete'][n-1]} | {s['strict_passed'][n-1]} | {m['unvisited']} | {', '.join(failures) or 'none'} |")
+            lines.append(f"| {s['site']} | {s['base_concurrency']} | {s['base_depth_limit'] if s['base_depth_limit'] is not None else 'reference'} | {s['base_rate_limit'] if s['base_rate_limit'] is not None else 'reference'} | {s['base_seconds_limit'] if s['base_seconds_limit'] is not None else 'reference'} | {s['base_max_pages_per_host'] if s['base_max_pages_per_host'] is not None else 'reference'} | {n} | {discovery_text} | {non_get} | {telemetry_excluded} | {success_text} | {s['execution_coverage_passed'][n-1]} | {s['crawl_complete'][n-1]} | {s['strict_passed'][n-1]} | {m['unvisited']} | {', '.join(failures) or 'none'} |")
     lines += ['', f"Reference execution >=95% sites: {result['reference_coverage_passed_sites']}/{len(sites)}; "
               f"fully completed crawls: {result['crawl_complete_sites']}/{len(sites)}; "
               f"strict passes: {result['strict_passed_sites']}/{len(sites)}."]
+    lines += ['', '## Excluded non-GET telemetry evidence', '',
+              'Successful non-GET requests with page/event identity and at least three browser navigation timing fields are excluded from the application-target denominator. Classification uses request JSON shape, not URL or host.', '',
+              '| Site | Round | Method | URL | HTTP status | Category | Payload fields |',
+              '|---|---:|---|---|---:|---|---|']
+    for s in sites:
+        for n, report in enumerate(s['excluded_non_get_telemetry'], 1):
+            for item in report:
+                url = item['url'].replace('|', '%7C')
+                statuses = ', '.join(str(value) for value in item.get('status_codes', []))
+                fields = ', '.join(item.get('evidence_fields', []))
+                lines.append(f"| {s['site']} | {n} | {item['method']} | {url} | {statuses} | {item['category']} | {fields} |")
     lines += ['', 'Katana network totals and JavaScript analysis failures are unknown, not zero. See each site metrics.json for separate static/browser reference coverage.',
               'RSC verification replays observed protocol headers; ordinary HTML GET cannot certify a Flight response. Cache-token aliases require matching context and response hashes.']
     lines += ['', '## Reference target execution diagnosis', '',
@@ -284,7 +297,8 @@ def compare_saved(args):
             if folder.name in manifest['sites'] and (folder / 'basecrawler/run.json').exists():
                 sites.setdefault(folder.name, []).append(folder)
     control_urls = getattr(args, 'control_urls', {})
-    bench.write_json(args.output / 'config.json', {'reference': str(args.reference.resolve()), 'saved_sources': [str(p.resolve()) for p in args.source], 'scoring_sha256':scoring_fingerprint(), 'control_urls': control_urls})
+    offline = getattr(args, 'offline', False)
+    bench.write_json(args.output / 'config.json', {'reference': str(args.reference.resolve()), 'saved_sources': [str(p.resolve()) for p in args.source], 'scoring_sha256':scoring_fingerprint(), 'control_urls': control_urls, 'offline_verification': offline})
     for site, folders in sites.items():
         for n, folder in enumerate(folders, 1):
             output = args.output / f'round-{n:02}' / site
@@ -295,9 +309,14 @@ def compare_saved(args):
                 if (folder / name).exists(): shutil.copy2(folder / name, output / name)
             options = SimpleNamespace(**{k:v for k,v in manifest['sites'][site]['settings'].items() if k!='katana_sha256'},
                                       output=output.parent, control_urls=control_urls,
-                                      verify_timeout=12, verify_workers=4, verify_limit=0)
+                                      verify_timeout=12, verify_workers=4, verify_limit=0,
+                                      offline=getattr(args, 'offline', False))
             bench.verify_site(bench.common.TARGETS[site], options)
-    bench.write_json(args.output / 'provenance.json', {'policy': 'Saved base results re-scored; no crawler executed', 'rounds': {s: len(f) for s, f in sites.items()}})
+    bench.write_json(args.output / 'provenance.json', {
+        'policy': 'Saved base results re-scored; no crawler executed',
+        'verification': 'Saved HTTP/control evidence only; no network requests' if offline else 'Missing verification evidence may be fetched',
+        'rounds': {s: len(f) for s, f in sites.items()},
+    })
     if sites:
         rounds = min(len(folders) for folders in sites.values())
         first_run = read(next(iter(sites.values()))[0] / 'basecrawler' / 'run.json')
@@ -330,6 +349,7 @@ if __name__ == '__main__':
     c.add_argument('--resume', action='store_true')
     c.add_argument('--targets', default='', help='limit saved-run re-scoring without executing crawlers')
     c.add_argument('--control-url', action='append', default=[], metavar='SITE_ID=URL')
+    c.add_argument('--offline', action='store_true', help='reuse saved verification/control evidence without network requests')
     args = parser.parse_args()
     try:
         args.control_urls = bench.parse_control_url_overrides(getattr(args, 'control_url', []))

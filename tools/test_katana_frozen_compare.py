@@ -88,6 +88,12 @@ class FrozenReferenceTests(unittest.TestCase):
             'strict_failure_reasons': ['basecrawler_crawl_incomplete'],
             'passed': False,
             'missing': [],
+            'excluded_non_get_telemetry_targets': 1,
+            'excluded_non_get_telemetry': [{
+                'method': 'POST', 'url': 'https://sample.test/collect',
+                'status_codes': [204], 'category': 'browser_performance_telemetry',
+                'evidence_fields': ['eventType', 'pageloadId', 'timingsV2.requestStart'],
+            }],
             'runs': {
                 'basecrawler': {'seconds': 180},
                 'katana-static': {'seconds': 60},
@@ -133,6 +139,7 @@ class FrozenReferenceTests(unittest.TestCase):
                 'successful_reference_coverage': 0.96,
                 'non_get_discovered_targets': 1,
                 'non_get_reference_targets': 1,
+                'excluded_non_get_telemetry_targets': 1,
             },
         }), encoding='utf-8')
 
@@ -151,6 +158,9 @@ class FrozenReferenceTests(unittest.TestCase):
         self.assertIn('Basecrawler source-level queue yield', report)
         self.assertIn('queued_not_dispatched', report)
         self.assertIn('https://example.test/queued-rsc', report)
+        self.assertIn('Excluded non-GET telemetry evidence', report)
+        self.assertIn('https://sample.test/collect', report)
+        self.assertIn('timingsV2.requestStart', report)
         self.assertIn('| sample | 1 | a | 20 | 18 | 20 | 18 | 18 | 18 | 0 | 10 | 10 | 9 | 9 | timeout=2 | none |', report)
 
 

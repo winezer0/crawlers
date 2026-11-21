@@ -103,9 +103,62 @@ def reference_execution_metrics(valid_urls, rows, completion=None):
     }, attempted, successful
 
 
-def observed_non_get_targets(site, modes, target_rows):
-    """Return method+URL pairs with a successful frozen non-GET response."""
-    observed = set()
+_NAVIGATION_TIMING_FIELDS = {
+    'domainlookupstart', 'domainlookupend', 'connectstart', 'connectend',
+    'secureconnectionstart', 'requeststart', 'responsestart', 'responseend',
+    'dominteractive', 'domcomplete', 'loadeventstart', 'loadeventend',
+    'firstpaint', 'firstcontentfulpaint', 'transfersize',
+    'decodedbodysize', 'encodedbodysize',
+}
+
+
+def classify_non_get_telemetry(request):
+    """Identify browser navigation telemetry by JSON payload shape, not URL."""
+    body = request.get('body')
+    if isinstance(body, str):
+        try:
+            body = json.loads(body)
+        except (TypeError, ValueError):
+            return None
+    if not isinstance(body, dict):
+        return None
+
+    event_fields = {'eventtype', 'event_type', 'event'}
+    page_identity_fields = {'pageloadid', 'page_load_id', 'navigationid', 'navigation_id'}
+    event_field = next((key for key in body if key.lower() in event_fields), None)
+    identity_field = next((key for key in body if key.lower() in page_identity_fields), None)
+    if not event_field or not identity_field:
+        return None
+
+    timing_paths = []
+
+    def collect_timings(value, prefix=''):
+        if isinstance(value, dict):
+            for key, child in value.items():
+                path = f'{prefix}.{key}' if prefix else str(key)
+                if key.lower() in _NAVIGATION_TIMING_FIELDS:
+                    timing_paths.append(path)
+                collect_timings(child, path)
+        elif isinstance(value, list):
+            for index, child in enumerate(value):
+                collect_timings(child, f'{prefix}[{index}]')
+
+    collect_timings(body)
+    if len(timing_paths) < 3:
+        return None
+    return {
+        'category': 'browser_performance_telemetry',
+        'evidence_fields': sorted([event_field, identity_field, *timing_paths]),
+    }
+
+
+def observed_non_get_target_observations(site, modes, target_rows):
+    """Split observed successful non-GET targets from telemetry evidence."""
+    candidates = {(str(row.get('method') or 'GET').upper(), common.normalize_url(row.get('url') or ''))
+                  for mode in modes for row in target_rows[mode]}
+    candidates.discard(('GET', None))
+    application_targets = set()
+    telemetry = {}
     for mode in modes:
         for row in jsonlines(site / mode / 'results.jsonl'):
             request = row.get('request') or {}
@@ -113,11 +166,41 @@ def observed_non_get_targets(site, modes, target_rows):
             method = str(request.get('method') or 'GET').upper()
             url = common.normalize_url(request.get('endpoint') or '')
             status = int(response.get('status_code') or 0)
-            if method != 'GET' and url and 200 <= status < 300 and not row.get('error'):
-                observed.add((method, url))
-    candidates = {(str(row.get('method') or 'GET').upper(), common.normalize_url(row.get('url') or ''))
-                  for mode in modes for row in target_rows[mode]}
-    return observed & candidates
+            pair = (method, url)
+            if method == 'GET' or not url or pair not in candidates or not 200 <= status < 300 or row.get('error'):
+                continue
+            classification = classify_non_get_telemetry(request)
+            if not classification:
+                application_targets.add(pair)
+                continue
+            item = telemetry.setdefault(pair, {
+                'method': method,
+                'url': url,
+                'status_codes': set(),
+                'reference_modes': set(),
+                'category': classification['category'],
+                'evidence_fields': set(),
+            })
+            item['status_codes'].add(status)
+            item['reference_modes'].add(mode)
+            item['evidence_fields'].update(classification['evidence_fields'])
+
+    excluded = []
+    for pair, item in sorted(telemetry.items()):
+        if pair in application_targets:
+            continue
+        excluded.append({
+            **item,
+            'status_codes': sorted(item['status_codes']),
+            'reference_modes': sorted(item['reference_modes']),
+            'evidence_fields': sorted(item['evidence_fields']),
+        })
+    return application_targets, excluded
+
+
+def observed_non_get_targets(site, modes, target_rows):
+    """Return successful application non-GET targets (excluding telemetry)."""
+    return observed_non_get_target_observations(site, modes, target_rows)[0]
 
 
 def method_aware_discovery_metrics(valid_get_urls, non_get_targets, base_method_urls):
@@ -619,7 +702,8 @@ def verify_site(target, args):
     # contracts remain visible but never receive invented success labels.
     sets = {m: {r['url'] for r in rows if eligible(r, m)} for m, rows in data.items()}
     reference = sets['katana-static'] | sets['katana-browser']
-    non_get_reference = observed_non_get_targets(site, MODES[1:], data)
+    non_get_reference, excluded_non_get_telemetry = observed_non_get_target_observations(
+        site, MODES[1:], data)
     # Verify all reference candidates plus potential basecrawler aliases, not
     # thousands of unrelated base-only sitemap URLs. Alias success still needs
     # the final URL or identical HTML evidence below.
@@ -650,19 +734,25 @@ def verify_site(target, args):
         if u in base_headers and protocol_identity(u,base_headers[u]) == protocol_identity(u,headers[u]):
             headers[u] = dict(headers[u], **base_headers[u])
     cache = {r['url']: r for r in jsonlines(site / 'verification.jsonl') if r.get('status') and r.get('status') not in (400,401,403,429) and not r.get('error') and not r.get('truncated')}
-    cache = {u:r for u,r in cache.items() if not is_rsc(u) or (headers.get(u) and protocol_headers(r.get('request_headers')) == headers[u])}
     control_url = control_url_for(target, getattr(args, 'control_urls', None))
     control_path = site / 'control.json'
     control = json.loads(control_path.read_text(encoding='utf-8')) if control_path.exists() else {}
     # Freeze a successful control alongside the per-URL evidence. A transient
     # failure during resume must not silently replace the baseline control.
-    if not usable_control(control) or control.get('url') != control_url:
+    offline = getattr(args, 'offline', False)
+    if not offline and (not usable_control(control) or control.get('url') != control_url):
         for _ in range(2):
             control = fetch(control_url, args.verify_timeout, args.proxy)
             if usable_control(control):
                 break
         write_json(control_path, control)
-    pending = [u for u in urls if u not in cache]
+    if offline:
+        # Preserve every saved response status as evidence. Failed or blocked
+        # responses remain unresolved, but are never retried during re-scoring.
+        cache = {r['url']: r for r in jsonlines(site / 'verification.jsonl')
+                 if r.get('status') and not r.get('error')}
+    cache = {u:r for u,r in cache.items() if not is_rsc(u) or (headers.get(u) and protocol_headers(r.get('request_headers')) == headers[u])}
+    pending = [] if offline else [u for u in urls if u not in cache]
     if args.verify_limit:
         pending = pending[:args.verify_limit]
     site.mkdir(parents=True, exist_ok=True)
@@ -692,16 +782,17 @@ def verify_site(target, args):
                     context['verification_profile']='observed_same_origin'
                     row=context
         return row
-    with (site / 'verification.jsonl').open('a', encoding='utf-8') as f:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=args.verify_workers) as pool:
-            futures = [pool.submit(limited_fetch, url) for url in pending]
-            for i, future in enumerate(concurrent.futures.as_completed(futures), 1):
-                row = future.result()
-                cache[row['url']] = row
-                f.write(json.dumps(row, ensure_ascii=False) + '\n')
-                f.flush()
-                if i % 50 == 0:
-                    print(json.dumps({'site': target.site_id, 'verified_new': i, 'pending_total': len(pending)}), flush=True)
+    if pending:
+        with (site / 'verification.jsonl').open('a', encoding='utf-8') as f:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=args.verify_workers) as pool:
+                futures = [pool.submit(limited_fetch, url) for url in pending]
+                for i, future in enumerate(concurrent.futures.as_completed(futures), 1):
+                    row = future.result()
+                    cache[row['url']] = row
+                    f.write(json.dumps(row, ensure_ascii=False) + '\n')
+                    f.flush()
+                    if i % 50 == 0:
+                        print(json.dumps({'site': target.site_id, 'verified_new': i, 'pending_total': len(pending)}), flush=True)
     categories = {u: classify(v, control) for u, v in cache.items()}
     valid = {u for u in reference if categories.get(u) in ('valid_page', 'valid_json', 'valid_rsc')}
     base = sets['basecrawler']
@@ -756,6 +847,7 @@ def verify_site(target, args):
     execution['non_get_reference_targets'] = len(non_get_reference)
     execution['non_get_discovered_targets'] = len(non_get_covered)
     execution['non_get_discovery_coverage'] = len(non_get_covered) / len(non_get_reference) if non_get_reference else None
+    execution['excluded_non_get_telemetry_targets'] = len(excluded_non_get_telemetry)
     execution['all_method_discovery_coverage'] = all_method_discovery
     for detail in details:
         detail['verification_request_headers'] = cache[detail['url']].get('request_headers', {})
@@ -820,6 +912,7 @@ def verify_site(target, args):
         }
     write_json(site/'metrics.json', {'modes':metrics, 'discovery_coverage':all_method_discovery,
         'reference_execution':execution, 'strict_acceptance_version':'complete-crawl-v3',
+        'excluded_non_get_telemetry': excluded_non_get_telemetry,
         'protocol_evidence_required':True,
         'reference_target_lifecycle': {
             'file': 'reference-target-lifecycle.jsonl',
@@ -847,6 +940,8 @@ def verify_site(target, args):
               'non_get_reference_targets': len(non_get_reference),
               'non_get_discovered_targets': len(non_get_covered),
               'non_get_discovery_coverage': execution['non_get_discovery_coverage'],
+              'excluded_non_get_telemetry_targets': len(excluded_non_get_telemetry),
+              'excluded_non_get_telemetry': excluded_non_get_telemetry,
               'all_method_discovery_coverage': all_method_discovery,
               'crawl_complete': crawl_complete, 'crawl_completion_passed': dimensions['crawl_completion_passed'],
               'strict_passed': dimensions['strict_passed'], 'strict_failure_reasons': strict_failures,
@@ -882,8 +977,8 @@ def summarize(args, targets):
         lines.append('| ' + ' | '.join([r['site'], *seconds, str(r['verified_valid_reference']), coverage, str(len(r['unresolved'])), reference_status, str(r['passed'])]) + ' |')
     lines += ['', f'达标站点：{passed}/{len(targets)}；总目标达成：{goal}。', '', '只核验 GET 页面/JSON；方法、参数、模板及业务有效性另行验收。未核验、网络错误和浏览器失败不会被当成达标。', '启用 basecrawler --fsu；发现记录保留过滤前证据。参数值和数字 ID 不做武断归并，HTML 别名需响应证据。']
     execution_lines = ['', '## Execution acceptance (complete-crawl-v3)', '',
-                       '| Site | Base c | Discovery | Exact successful GET | Crawl complete | Strict failure reasons |',
-                       '|---|---:|---:|---:|---|---|']
+                       '| Site | Base c | Discovery | Exact successful GET | App non-GET | Telemetry excluded | Crawl complete | Strict failure reasons |',
+                       '|---|---:|---:|---:|---:|---:|---|---|']
     for r in rows:
         base_run = r['runs']['basecrawler']
         completion = base_run.get('crawl_completion', {})
@@ -893,8 +988,21 @@ def summarize(args, targets):
         successful_text = f'{successful:.2%}' if successful is not None else 'n/a'
         complete_text = str(completion.get('complete') is True)
         reasons = ', '.join(r.get('strict_failure_reasons', [])) or 'none'
+        non_get_text = f"{r.get('non_get_discovered_targets', 0)}/{r.get('non_get_reference_targets', 0)}"
+        telemetry_count = str(r.get('excluded_non_get_telemetry_targets', 0))
         execution_lines.append('| ' + ' | '.join([r['site'], str(base_run.get('concurrency', 1)), discovery_text,
-                                                  successful_text, complete_text, reasons]) + ' |')
+                                                  successful_text, non_get_text, telemetry_count,
+                                                  complete_text, reasons]) + ' |')
+    execution_lines += ['', '### Excluded non-GET telemetry evidence', '',
+                        'Successful non-GET requests with page/event identity and at least three browser navigation timing fields are excluded from the application-target denominator. Classification uses request JSON shape, not URL or host.', '',
+                        '| Site | Method | URL | HTTP status | Category | Payload fields |',
+                        '|---|---|---|---:|---|---|']
+    for r in rows:
+        for item in r.get('excluded_non_get_telemetry', []):
+            url = item['url'].replace('|', '%7C')
+            fields = ', '.join(item.get('evidence_fields', []))
+            statuses = ', '.join(str(value) for value in item.get('status_codes', []))
+            execution_lines.append(f"| {r['site']} | {item['method']} | {url} | {statuses} | {item['category']} | {fields} |")
     lines += execution_lines
     (args.output / 'summary.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
     return goal

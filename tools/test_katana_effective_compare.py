@@ -73,6 +73,62 @@ class AcceptanceAndControlTests(unittest.TestCase):
 
         self.assertEqual(targets, {('POST', post_url)})
 
+    def test_performance_telemetry_is_excluded_by_payload_shape_not_url(self):
+        telemetry_request = {'body': json.dumps({
+            'pageloadId': 'load-1', 'eventType': 1,
+            'timingsV2': {'domainLookupStart': 1, 'connectStart': 2,
+                          'requestStart': 3, 'responseStart': 4,
+                          'domInteractive': 5, 'transferSize': 100},
+            'firstContentfulPaint': 5,
+        })}
+        ordinary_post = {'body': json.dumps({'email': 'reader@example.test', 'message': 'hello'})}
+        event_without_navigation_timings = {'body': json.dumps({
+            'pageLoadId': 'business-flow-1', 'eventType': 'purchase',
+        })}
+
+        classification = compare.classify_non_get_telemetry(telemetry_request)
+        self.assertEqual(classification['category'], 'browser_performance_telemetry')
+        self.assertEqual(set(classification['evidence_fields']), {
+            'eventType', 'firstContentfulPaint', 'pageloadId',
+            'timingsV2.connectStart', 'timingsV2.domainLookupStart',
+            'timingsV2.domInteractive', 'timingsV2.requestStart',
+            'timingsV2.responseStart', 'timingsV2.transferSize',
+        })
+        self.assertIsNone(compare.classify_non_get_telemetry(ordinary_post))
+        self.assertIsNone(compare.classify_non_get_telemetry(event_without_navigation_timings))
+
+    def test_non_get_observations_keep_business_posts_and_report_telemetry(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            site = Path(temporary)
+            (site / 'katana-browser').mkdir()
+            telemetry_url = 'https://example.test/collect'
+            business_url = 'https://example.test/orders'
+            rows = [
+                {'request': {'method': 'POST', 'endpoint': telemetry_url, 'body': json.dumps({
+                    'pageloadId': 'load-1', 'eventType': 1,
+                    'timingsV2': {'requestStart': 1, 'responseStart': 2, 'domComplete': 3},
+                })}, 'response': {'status_code': 204}},
+                {'request': {'method': 'POST', 'endpoint': business_url,
+                             'body': json.dumps({'product': 'book', 'quantity': 2})},
+                 'response': {'status_code': 201}},
+            ]
+            (site / 'katana-browser' / 'results.jsonl').write_text(
+                ''.join(json.dumps(row) + '\n' for row in rows), encoding='utf-8')
+            target_rows = {'katana-browser': [
+                {'method': 'POST', 'url': telemetry_url},
+                {'method': 'POST', 'url': business_url},
+            ]}
+
+            application, excluded = compare.observed_non_get_target_observations(
+                site, ('katana-browser',), target_rows)
+
+        self.assertEqual(application, {('POST', business_url)})
+        self.assertEqual(len(excluded), 1)
+        self.assertEqual(excluded[0]['url'], telemetry_url)
+        self.assertEqual(excluded[0]['status_codes'], [204])
+        self.assertIn('timingsV2.requestStart', excluded[0]['evidence_fields'])
+        self.assertNotIn('body', excluded[0])
+
     def test_execution_coverage_requires_an_actual_successful_get(self):
         valid = {'https://example.test/a', 'https://example.test/b', 'https://example.test/c'}
         rows = [

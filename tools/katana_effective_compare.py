@@ -76,6 +76,9 @@ def reference_execution_metrics(valid_urls, rows, completion=None):
             'method': request.get('method'),
             'status': request.get('http_status', 0),
             'error': request.get('error') or ('' if request.get('state') == 'complete' else request.get('state', '')),
+            'content_type': request.get('content_type', ''),
+            'truncated': bool(request.get('truncated')),
+            'request_headers': request.get('protocol_headers') or {},
         } for request in audited_requests]
     for row in rows:
         requested_url = common.normalize_url(row.get('requested_url') or row.get('url') or '')
@@ -425,6 +428,149 @@ def candidate_is_crawlable(row):
     return any(confidence not in ('clue', 'template') for confidence in confidences)
 
 
+def reference_target_lifecycle(valid_get_urls, non_get_targets, candidates, completion, comparisons=()):
+    """Join immutable reference targets to Basecrawler discovery, queue and request evidence."""
+    target_pairs = {('GET', common.normalize_url(url)) for url in valid_get_urls}
+    target_pairs.update((str(method).upper(), common.normalize_url(url)) for method, url in non_get_targets)
+    target_pairs.discard(('GET', None))
+    target_pairs = {(method, url) for method, url in target_pairs if url}
+
+    candidate_index = {}
+    for row in candidates:
+        method = str(row.get('method') or 'GET').upper()
+        url = common.normalize_url(row.get('url') or '')
+        if url:
+            candidate_index.setdefault((method, url), []).append(row)
+
+    attempt_index = {}
+    for request in completion.get('requests') or []:
+        method = str(request.get('method') or 'GET').upper()
+        url = common.normalize_url(request.get('requested_url') or '')
+        if url:
+            attempt_index.setdefault((method, url), []).append(request)
+
+    pending_index = {}
+    for pending in completion.get('unvisited') or []:
+        method = str(pending.get('method') or 'GET').upper()
+        url = common.normalize_url(pending.get('url') or '')
+        if url:
+            pending_index.setdefault((method, url), []).append(pending)
+
+    comparison_index = {}
+    for detail in comparisons:
+        url = common.normalize_url(detail.get('url') or '')
+        if url:
+            comparison_index[('GET', url)] = detail
+
+    lifecycle = []
+    for method, url in sorted(target_pairs):
+        candidate_rows = candidate_index.get((method, url), [])
+        attempts = sorted(attempt_index.get((method, url), []), key=lambda row: row.get('sequence', 0))
+        pending = pending_index.get((method, url), [])
+        queued_pending = [row for row in pending if row.get('queue_state') != 'not_queued']
+        deferred = [row for row in pending if row.get('queue_state') == 'not_queued']
+        sources = {}
+        for row in candidate_rows:
+            records = row.get('source_records') or [{
+                'source': row.get('source') or 'unknown',
+                'confidence': row.get('confidence') or '',
+                'evidence': row.get('evidence') or '',
+            }]
+            for record in records:
+                source = record.get('source') or 'unknown'
+                key = (source, str(record.get('confidence') or '').lower(),
+                       record.get('evidence') or '', record.get('record_file') or '')
+                source_row = sources.setdefault(key, {
+                    'source': source, 'confidence': key[1], 'evidence': key[2],
+                    'record_file': key[3],
+                    'referers': set(), 'depths': set(),
+                })
+                source_row['referers'].update(record.get('referers') or ([row.get('referer')] if row.get('referer') else []))
+                source_row['depths'].update(record.get('depths') or ([row['depth']] if row.get('depth') is not None else []))
+
+        discovered = bool(candidate_rows)
+        crawlable = any(candidate_is_crawlable(row) for row in candidate_rows)
+        successful_attempts = []
+        for request in attempts:
+            request_url = common.normalize_url(request.get('requested_url') or '')
+            final_url = common.normalize_url(request.get('final_url') or request_url)
+            status = int(request.get('http_status') or 0)
+            request_error = request.get('error') or ('' if request.get('state') == 'complete' else request.get('state', ''))
+            if (200 <= status < 300 and not request_error and not request.get('truncated')
+                    and final_url == url):
+                successful_attempts.append(request)
+
+        if not discovered:
+            state = 'not_discovered'
+        elif successful_attempts:
+            state = 'dispatched_exact_http_success'
+        elif attempts:
+            latest = attempts[-1]
+            status = int(latest.get('http_status') or 0)
+            request_error = latest.get('error') or ('' if latest.get('state') == 'complete' else latest.get('state', ''))
+            if latest.get('truncated'):
+                state = 'dispatched_response_truncated'
+            elif latest.get('state') == 'timeout' or request_error == 'timeout':
+                state = 'dispatched_timeout'
+            elif latest.get('state') == 'canceled' or request_error == 'canceled':
+                state = 'dispatched_canceled'
+            elif request_error:
+                state = 'dispatched_request_error'
+            elif status and not 200 <= status < 300:
+                state = 'dispatched_http_error'
+            elif common.normalize_url(latest.get('final_url') or url) != url:
+                state = 'dispatched_redirected'
+            else:
+                state = 'dispatched_unverified'
+        elif queued_pending:
+            state = 'queued_not_dispatched'
+        elif method != 'GET':
+            state = 'discovered_interface_not_sent'
+        elif not crawlable:
+            state = 'discovered_non_crawlable'
+        elif deferred:
+            state = 'discovered_not_queued'
+        else:
+            state = 'discovered_not_scheduled_reason_unknown'
+
+        comparison = comparison_index.get((method, url), {})
+        row = {
+            'method': method,
+            'url': url,
+            'state': state,
+            'discovered': discovered,
+            'crawlable': crawlable,
+            'scheduled': bool(attempts or queued_pending),
+            'dispatched': bool(attempts),
+            'dispatch_count': len(attempts),
+            'exact_http_success': bool(successful_attempts),
+            'effective_reference_covered': comparison.get('base_covered') if comparison else None,
+            'sources': [{**sources[key], 'referers': sorted(sources[key]['referers']),
+                         'depths': sorted(sources[key]['depths'])} for key in sorted(sources)],
+            'requests': [{
+                'sequence': request.get('sequence'),
+                'source': request.get('source') or '',
+                'state': request.get('state') or '',
+                'http_status': request.get('http_status') or 0,
+                'content_type': request.get('content_type') or '',
+                'final_url': request.get('final_url') or request.get('requested_url') or '',
+                'truncated': bool(request.get('truncated')),
+                'error': request.get('error') or '',
+                'protocol_headers': request.get('protocol_headers') or {},
+            } for request in attempts],
+            'unvisited': [{
+                'reason': pending_row.get('reason') or 'unknown',
+                'queue_state': pending_row.get('queue_state') or 'queued',
+                'source': pending_row.get('source') or '',
+                'referer': pending_row.get('referer') or '',
+                'depth': pending_row.get('depth'),
+            } for pending_row in pending],
+            'not_scheduled_reasons': sorted({pending_row.get('reason') or 'unknown' for pending_row in deferred}),
+        }
+        lifecycle.append(row)
+    return lifecycle
+
+
 def eligible(row, mode='katana'):
     p = urlsplit(row['url'])
     return (row['method'] == 'GET' and not ASSET.search(p.path)
@@ -618,9 +764,19 @@ def verify_site(target, args):
         detail['base_discovered'] = ('GET', common.normalize_url(detail['url'])) in base_method_urls
         if not detail['base_covered']:
             detail['gap_evidence'] = gap_evidence(detail['url'], data, runs['basecrawler'], base_result_rows)
+    target_lifecycle = reference_target_lifecycle(
+        valid, non_get_reference, data['basecrawler'], completion, details)
+    lifecycle_by_pair = {(row['method'], row['url']): row for row in target_lifecycle}
+    for detail in details:
+        pair = ('GET', common.normalize_url(detail['url']))
+        detail['execution_lifecycle'] = lifecycle_by_pair.get(pair)
     (site / 'comparison.jsonl').write_text(''.join(json.dumps(r, ensure_ascii=False)+'\n' for r in details), encoding='utf-8')
+    (site / 'reference-target-lifecycle.jsonl').write_text(
+        ''.join(json.dumps(row, ensure_ascii=False) + '\n' for row in target_lifecycle), encoding='utf-8')
     metrics = {m: mode_metrics(m, data[m], base_result_rows if m == 'basecrawler' else jsonlines(site/m/'results.jsonl'), runs[m]) for m in MODES}
     metrics['basecrawler']['reference_execution'] = execution
+    metrics['basecrawler']['reference_target_lifecycle'] = dict(sorted(Counter(
+        row['state'] for row in target_lifecycle).items()))
     metrics['basecrawler']['source_execution'] = source_execution_metrics(
         data['basecrawler'], completion, valid)
     base_pairs = {(r['method'], r['url']) for r in data['basecrawler']}
@@ -665,6 +821,11 @@ def verify_site(target, args):
     write_json(site/'metrics.json', {'modes':metrics, 'discovery_coverage':all_method_discovery,
         'reference_execution':execution, 'strict_acceptance_version':'complete-crawl-v3',
         'protocol_evidence_required':True,
+        'reference_target_lifecycle': {
+            'file': 'reference-target-lifecycle.jsonl',
+            'targets': len(target_lifecycle),
+            'states': dict(sorted(Counter(row['state'] for row in target_lifecycle).items())),
+        },
         'reference_freshness':'historical frozen crawl; saved HTTP evidence may also be historical',
         'basecrawler_candidate_audit':candidate_audit})
     strict_failures = strict_acceptance_failures(all_method_valid, all_method_discovery, unresolved, runs, execution)

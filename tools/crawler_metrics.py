@@ -53,6 +53,9 @@ def mode_metrics(mode, candidates, rows, run):
             'method': request.get('method'),
             'status': request.get('http_status', 0),
             'error': request.get('error') or ('' if request.get('state') == 'complete' else request.get('state', '')),
+            'content_type': request.get('content_type', ''),
+            'truncated': bool(request.get('truncated')),
+            'request_headers': request.get('protocol_headers') or {},
         } for request in audited_requests]
     for row in rows:
         req = row if mode == 'basecrawler' else row.get('request', {})
@@ -69,6 +72,9 @@ def mode_metrics(mode, candidates, rows, run):
                 and row.get('final_url', url) == url):
             successful.add(key)
     reasons = {r['code']: r['count'] for r in completion.get('reasons', [])}
+    unvisited = completion.get('unvisited', [])
+    queued_unvisited = [row for row in unvisited if row.get('queue_state') != 'not_queued']
+    not_scheduled = [row for row in unvisited if row.get('queue_state') == 'not_queued']
     return {'discovered_method_urls': len({(r['method'], r['url']) for r in candidates}),
             'observed_attempted_method_urls': len(attempted),
             'observed_successful_method_urls': len(successful),
@@ -77,8 +83,10 @@ def mode_metrics(mode, candidates, rows, run):
             'seconds': run['seconds'], 'boundary_discoveries': boundaries,
             'analysis_failures': reasons.get('analysis_failure', 0) if mode == 'basecrawler' else None,
             'execution_limits': {k:v for k,v in reasons.items() if k.startswith(('execution_', 'module_'))},
-            'unvisited': len(completion.get('unvisited', [])),
-            'unvisited_reasons': dict(Counter(r['reason'] for r in completion.get('unvisited', []))),
+            'unvisited': len(queued_unvisited),
+            'unvisited_reasons': dict(Counter(r.get('reason') or 'unknown' for r in queued_unvisited)),
+            'not_scheduled': len(not_scheduled),
+            'not_scheduled_reasons': dict(Counter(r.get('reason') or 'unknown' for r in not_scheduled)),
             'run_status': run['status']}
 
 
@@ -96,6 +104,7 @@ def source_execution_metrics(candidates, completion, valid_reference_urls=()):
             'reference_targets_discovered': set(),
             'scheduled_method_urls': set(),
             'scheduled_reference_targets': set(),
+            'not_scheduled_method_urls': set(),
             'dispatches': 0,
             'attempted_method_urls': set(),
             'successful_http_responses': 0,
@@ -105,6 +114,7 @@ def source_execution_metrics(candidates, completion, valid_reference_urls=()):
             'reference_targets_successful': set(),
             'unvisited_method_urls': set(),
             'unvisited_by_reason': Counter(),
+            'not_scheduled_by_reason': Counter(),
         })
 
     for row in candidates:
@@ -148,6 +158,7 @@ def source_execution_metrics(candidates, completion, valid_reference_urls=()):
         status = int(request.get('http_status') or 0)
         final_url = normalize_url(request.get('final_url') or url)
         response_success = (200 <= status < 300 and not request.get('error')
+                            and not request.get('truncated')
                             and request.get('state', 'complete') == 'complete')
         if response_success:
             item['successful_http_responses'] += 1
@@ -162,18 +173,23 @@ def source_execution_metrics(candidates, completion, valid_reference_urls=()):
         item = entry(source)
         method = str(row.get('method') or 'GET').upper()
         url = normalize_url(row.get('url') or '')
+        queue_state = row.get('queue_state') or 'queued'
         if url:
             pair = (method, url)
-            item['scheduled_method_urls'].add(pair)
-            item['unvisited_method_urls'].add(pair)
-            if method == 'GET' and url in valid:
-                item['scheduled_reference_targets'].add(url)
-        item['unvisited_by_reason'][row.get('reason') or 'unknown'] += 1
+            if queue_state == 'not_queued':
+                item['not_scheduled_method_urls'].add(pair)
+                item['not_scheduled_by_reason'][row.get('reason') or 'unknown'] += 1
+            else:
+                item['unvisited_method_urls'].add(pair)
+                item['scheduled_method_urls'].add(pair)
+                if method == 'GET' and url in valid:
+                    item['scheduled_reference_targets'].add(url)
+                item['unvisited_by_reason'][row.get('reason') or 'unknown'] += 1
 
     result = {}
     set_fields = (
         'discovered_method_urls', 'crawlable_method_urls', 'reference_targets_discovered',
-        'scheduled_method_urls', 'scheduled_reference_targets',
+        'scheduled_method_urls', 'scheduled_reference_targets', 'not_scheduled_method_urls',
         'attempted_method_urls', 'successful_method_urls', 'reference_targets_attempted',
         'reference_targets_successful', 'unvisited_method_urls',
     )
@@ -183,6 +199,7 @@ def source_execution_metrics(candidates, completion, valid_reference_urls=()):
         output['successful_http_responses'] = item['successful_http_responses']
         output['exact_successful_method_urls'] = len(item['exact_successful_method_urls'])
         output['unvisited_by_reason'] = dict(sorted(item['unvisited_by_reason'].items()))
+        output['not_scheduled_by_reason'] = dict(sorted(item['not_scheduled_by_reason'].items()))
         result[source] = output
     return result
 

@@ -104,6 +104,10 @@ def summarize(output, targets, rounds, base_concurrency=1, base_rate_limit=None,
                       'metrics': [read(output / f'round-{n:02}' / target.site_id / 'metrics.json')
                                   for n in range(1, rounds + 1)
                                   if (output / f'round-{n:02}' / target.site_id / 'metrics.json').exists()],
+                       'target_lifecycle_files': [
+                           str((Path(f'round-{n:02}') / target.site_id / 'reference-target-lifecycle.jsonl').as_posix())
+                           for n in range(1, rounds + 1)
+                           if (output / f'round-{n:02}' / target.site_id / 'reference-target-lifecycle.jsonl').exists()],
                       'base_seconds': [r['runs']['basecrawler']['seconds'] for r in reports],
                       'base_concurrency': base_concurrency,
                        'base_rate_limit': base_rate_limit,
@@ -135,12 +139,12 @@ def summarize(output, targets, rounds, base_concurrency=1, base_rate_limit=None,
         lines.append(f"| {s['site']} | {statistics.mean(s['base_seconds']):.2f} | {s['reference_seconds']['katana-static']:.2f} | {s['reference_seconds']['katana-browser']:.2f} | {cov} | {s['base_stability']:.3f} | {s['passed']} |")
     lines += ['', f"正式通过 {result['passed_sites']}/{len(sites)}；总体目标达成：{result['goal_met']}。", '', result['reference_policy'], *result['limitations']]
     lines += ['', '## Discovery and execution metrics (separate from strict acceptance)', '',
-              '| Site | Round | Discovered method/URL | Observed successful method/URL | Dispatch attempts | Analysis failures | Unvisited | Seconds |',
-              '|---|---:|---:|---:|---:|---:|---:|---:|']
+              '| Site | Round | Discovered method/URL | Observed successful method/URL | Dispatch attempts | Analysis failures | Queued unvisited | Not scheduled | Seconds |',
+              '|---|---:|---:|---:|---:|---:|---:|---:|---:|']
     for s in sites:
         for n, metric in enumerate(s['metrics'], 1):
             m = metric['modes']['basecrawler']
-            lines.append(f"| {s['site']} | {n} | {m['discovered_method_urls']} | {m['observed_successful_method_urls']} | {m['requests_attempted']} | {m['analysis_failures']} | {m['unvisited']} | {m['seconds']:.2f} |")
+            lines.append(f"| {s['site']} | {n} | {m['discovered_method_urls']} | {m['observed_successful_method_urls']} | {m['requests_attempted']} | {m['analysis_failures']} | {m['unvisited']} | {m.get('not_scheduled', 0)} | {m['seconds']:.2f} |")
     lines += ['', '## Discovery, request execution, and completion', '',
               '| Site | Base c | Base depth | Base QPS limit | Base time limit (s) | Base page cap | Round | All-method discovery | Non-GET targets found | Exact successful GET | GET >=95% | Crawl complete | Strict pass | Unvisited | Strict failure reasons |',
               '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---|---:|---|']
@@ -160,15 +164,48 @@ def summarize(output, targets, rounds, base_concurrency=1, base_rate_limit=None,
               f"strict passes: {result['strict_passed_sites']}/{len(sites)}."]
     lines += ['', 'Katana network totals and JavaScript analysis failures are unknown, not zero. See each site metrics.json for separate static/browser reference coverage.',
               'RSC verification replays observed protocol headers; ordinary HTML GET cannot certify a Flight response. Cache-token aliases require matching context and response hashes.']
+    lines += ['', '## Reference target execution diagnosis', '',
+              'Each lifecycle file contains every validated GET target and observed non-GET target, joined to Basecrawler discovery provenance, pending queue records, and request attempts.', '',
+              '| Site | Round | Method | URL | State | Discovered/crawlable | Scheduled/dispatched | Queue reason | Request outcome | Source |',
+              '|---|---:|---|---|---|---|---|---|---|---|']
+    for s in sites:
+        for n in range(1, rounds + 1):
+            lifecycle_path = output / f'round-{n:02}' / s['site'] / 'reference-target-lifecycle.jsonl'
+            if not lifecycle_path.exists():
+                continue
+            for row in bench.jsonlines(lifecycle_path):
+                covered = row.get('effective_reference_covered') is True
+                if row['method'] == 'GET' and row.get('exact_http_success') and covered:
+                    continue
+                source_rows = sorted({
+                    (item.get('source') or 'unknown', tuple(item.get('depths') or []))
+                    for item in row.get('sources', [])
+                })
+                sources = ', '.join(
+                    source + ('@d' + ','.join(str(depth) for depth in depths) if depths else '')
+                    for source, depths in source_rows) or 'none'
+                reasons = ', '.join(sorted({item.get('reason') or 'unknown' for item in row.get('unvisited', [])})) or 'none'
+                outcomes = ', '.join(
+                    f"{item.get('state') or 'unknown'}/{item.get('http_status') or 0}/"
+                    f"{item.get('content_type') or '-'}/truncated={bool(item.get('truncated'))}"
+                    for item in row.get('requests', [])) or 'not dispatched'
+                url = row['url'].replace('|', '%7C')
+                lines.append(f"| {s['site']} | {n} | {row['method']} | {url} | {row['state']} | "
+                             f"{row['discovered']}/{row['crawlable']} | {row['scheduled']}/{row['dispatched']} | "
+                             f"{reasons} | {outcomes} | {sources} |")
+    for s in sites:
+        for path in s.get('target_lifecycle_files', []):
+            lines.append(f"- {s['site']}: `{path}`")
     lines += ['', '## Basecrawler source-level queue yield', '',
-              '| Site | Round | Source | Discovered candidates | Scheduled | Crawlable candidates | Dispatches | HTTP 2xx responses | Exact URL successes | Valid reference found | Valid reference scheduled | Valid reference attempted | Valid reference success | Unvisited reasons |',
-              '|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|']
+              '| Site | Round | Source | Discovered candidates | Scheduled | Crawlable candidates | Dispatches | HTTP 2xx responses | Exact URL successes | Not scheduled | Valid reference found | Valid reference scheduled | Valid reference attempted | Valid reference success | Unvisited reasons | Not scheduled reasons |',
+              '|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|']
     for s in sites:
         for n, metric in enumerate(s['metrics'], 1):
             source_rows = metric.get('modes', {}).get('basecrawler', {}).get('source_execution', {})
             for source, counts in sorted(source_rows.items()):
                 reasons = ', '.join(f'{reason}={count}' for reason, count in sorted(counts['unvisited_by_reason'].items())) or 'none'
-                lines.append(f"| {s['site']} | {n} | {source} | {counts['discovered_method_urls']} | {counts['scheduled_method_urls']} | {counts['crawlable_method_urls']} | {counts['dispatches']} | {counts['successful_http_responses']} | {counts['exact_successful_method_urls']} | {counts['reference_targets_discovered']} | {counts['scheduled_reference_targets']} | {counts['reference_targets_attempted']} | {counts['reference_targets_successful']} | {reasons} |")
+                not_scheduled = ', '.join(f'{reason}={count}' for reason, count in sorted(counts.get('not_scheduled_by_reason', {}).items())) or 'none'
+                lines.append(f"| {s['site']} | {n} | {source} | {counts['discovered_method_urls']} | {counts['scheduled_method_urls']} | {counts['crawlable_method_urls']} | {counts['dispatches']} | {counts['successful_http_responses']} | {counts['exact_successful_method_urls']} | {counts.get('not_scheduled_method_urls', 0)} | {counts['reference_targets_discovered']} | {counts['scheduled_reference_targets']} | {counts['reference_targets_attempted']} | {counts['reference_targets_successful']} | {reasons} | {not_scheduled} |")
     lines += ['', 'Per-source discovery counts overlap when the same method/URL has multiple provenance records. Scheduled counts are the union of dispatched and still-unvisited method/URLs. Dispatches count crawler-level requests; bootstrap, retry, and redirect hops are excluded.']
     (output / 'summary.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
     return result

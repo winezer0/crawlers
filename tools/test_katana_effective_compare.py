@@ -116,6 +116,75 @@ class AcceptanceAndControlTests(unittest.TestCase):
         self.assertEqual(successful, {'https://example.test/a'})
         self.assertEqual(metrics['successful_reference_coverage'], 1 / 4)
 
+    def test_truncated_completion_response_is_not_successful_reference_coverage(self):
+        valid = {'https://example.test/a', 'https://example.test/b'}
+        completion = {'requests': [
+            {'requested_url': 'https://example.test/a', 'final_url': 'https://example.test/a',
+             'method': 'GET', 'http_status': 200, 'state': 'complete', 'truncated': True},
+            {'requested_url': 'https://example.test/b', 'final_url': 'https://example.test/b',
+             'method': 'GET', 'http_status': 200, 'state': 'complete', 'truncated': False},
+        ]}
+
+        metrics, _, successful = compare.reference_execution_metrics(valid, [], completion)
+
+        self.assertEqual(successful, {'https://example.test/b'})
+        self.assertEqual(metrics['successful_reference_coverage'], 1 / 2)
+
+    def test_reference_target_lifecycle_separates_discovery_queue_and_request_outcome(self):
+        urls = {
+            'success': 'https://example.test/success',
+            'pending': 'https://example.test/pending',
+            'clue': 'https://example.test/clue',
+            'dropped': 'https://example.test/dropped',
+            'missing': 'https://example.test/missing',
+            'post': 'https://example.test/action',
+        }
+        candidates = [
+            {'url': urls['success'], 'method': 'GET', 'source_records': [{'source': 'a', 'confidence': ''}]},
+            {'url': urls['pending'], 'method': 'GET', 'source_records': [{'source': 'next-rsc:prefetch', 'confidence': ''}]},
+            {'url': urls['clue'], 'method': 'GET', 'source_records': [{'source': 'js-ast:goja', 'confidence': 'clue'}]},
+            {'url': urls['dropped'], 'method': 'GET', 'source_records': [{'source': 'sitemap', 'confidence': ''}]},
+            {'url': urls['post'], 'method': 'POST', 'source_records': [{'source': 'form', 'confidence': 'interface'}]},
+        ]
+        completion = {
+            'requests': [{
+                'sequence': 1, 'requested_url': urls['success'], 'final_url': urls['success'],
+                'method': 'GET', 'source': 'a', 'http_status': 200, 'content_type': 'text/html',
+                'state': 'complete', 'protocol_headers': {},
+            }],
+            'unvisited': [{'url': urls['pending'], 'method': 'GET', 'source': 'next-rsc:prefetch', 'reason': 'timeout'}],
+        }
+        comparisons = [{'url': urls['success'], 'base_covered': True}]
+
+        rows = compare.reference_target_lifecycle(
+            {urls['success'], urls['pending'], urls['clue'], urls['dropped'], urls['missing']},
+            {('POST', urls['post'])}, candidates, completion, comparisons)
+        by_url = {row['url']: row for row in rows}
+
+        self.assertEqual(by_url[urls['success']]['state'], 'dispatched_exact_http_success')
+        self.assertTrue(by_url[urls['success']]['effective_reference_covered'])
+        self.assertEqual(by_url[urls['pending']]['state'], 'queued_not_dispatched')
+        self.assertEqual(by_url[urls['pending']]['unvisited'][0]['reason'], 'timeout')
+        self.assertEqual(by_url[urls['clue']]['state'], 'discovered_non_crawlable')
+        self.assertEqual(by_url[urls['dropped']]['state'], 'discovered_not_scheduled_reason_unknown')
+        self.assertEqual(by_url[urls['missing']]['state'], 'not_discovered')
+        self.assertEqual(by_url[urls['post']]['state'], 'discovered_interface_not_sent')
+
+    def test_reference_lifecycle_marks_truncated_and_protocol_context(self):
+        url = 'https://example.test/flight?_rsc=abc'
+        candidates = [{'url': url, 'method': 'GET', 'source_records': [{'source': 'next-rsc:segment'}]}]
+        completion = {'requests': [{
+            'requested_url': url, 'final_url': url, 'method': 'GET', 'source': 'next-rsc:segment',
+            'http_status': 200, 'content_type': 'text/x-component', 'truncated': True,
+            'state': 'complete', 'protocol_headers': {'rsc': '1', 'next-url': '/learn'},
+        }]}
+
+        row = compare.reference_target_lifecycle({url}, set(), candidates, completion)[0]
+
+        self.assertEqual(row['state'], 'dispatched_response_truncated')
+        self.assertFalse(row['exact_http_success'])
+        self.assertEqual(row['requests'][0]['protocol_headers'], {'rsc': '1', 'next-url': '/learn'})
+
     def test_legacy_completion_without_methods_falls_back_to_result_rows(self):
         valid = {'https://example.test/a', 'https://example.test/b'}
         legacy_completion = {'requests': [

@@ -95,6 +95,15 @@ class FrozenReferenceTests(unittest.TestCase):
             },
         }), encoding='utf-8')
         (site / 'basecrawler' / 'candidates.json').write_text('[]', encoding='utf-8')
+        (site / 'reference-target-lifecycle.jsonl').write_text(json.dumps({
+            'method': 'GET', 'url': 'https://example.test/queued-rsc',
+            'state': 'queued_not_dispatched', 'discovered': True, 'crawlable': True,
+            'scheduled': True, 'dispatched': False, 'exact_http_success': False,
+            'effective_reference_covered': True,
+            'not_scheduled_reasons': [],
+            'unvisited': [{'queue_state': 'queued', 'reason': 'timeout'}],
+            'requests': [], 'sources': [{'source': 'next-rsc:prefetch', 'depths': [2]}],
+        }) + '\n', encoding='utf-8')
         source_counts = {
             'a': {
                 'discovered_method_urls': 20,
@@ -140,7 +149,9 @@ class FrozenReferenceTests(unittest.TestCase):
         self.assertIn('GET >=95%', report)
         self.assertIn('Crawl complete', report)
         self.assertIn('Basecrawler source-level queue yield', report)
-        self.assertIn('| sample | 1 | a | 20 | 18 | 20 | 18 | 18 | 18 | 10 | 10 | 9 | 9 | timeout=2 |', report)
+        self.assertIn('queued_not_dispatched', report)
+        self.assertIn('https://example.test/queued-rsc', report)
+        self.assertIn('| sample | 1 | a | 20 | 18 | 20 | 18 | 18 | 18 | 0 | 10 | 10 | 9 | 9 | timeout=2 | none |', report)
 
 
 if __name__=='__main__':unittest.main()

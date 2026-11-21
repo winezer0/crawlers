@@ -71,6 +71,47 @@ class ProtocolMetricsTests(unittest.TestCase):
         self.assertEqual(metrics['observed_attempted_method_urls'], 3)
         self.assertEqual(metrics['observed_successful_method_urls'], 2)
 
+    def test_truncated_request_audit_is_attempted_but_not_successful(self):
+        url = 'https://example.test/truncated'
+        candidates = [{'url': url, 'method': 'GET', 'source': 'next-rsc:segment'}]
+        completion = {'requests': [{
+            'requested_url': url, 'final_url': url, 'method': 'GET', 'source': 'next-rsc:segment',
+            'http_status': 200, 'content_type': 'text/x-component', 'truncated': True, 'state': 'complete',
+            'protocol_headers': {'rsc': '1'},
+        }]}
+
+        metrics = mode_metrics('basecrawler', candidates, [], {
+            'seconds': 1.0, 'status': 'completed', 'crawl_completion': completion,
+        })
+        source = source_execution_metrics(candidates, completion, {url})['next-rsc:segment']
+
+        self.assertEqual(metrics['observed_attempted_method_urls'], 1)
+        self.assertEqual(metrics['observed_successful_method_urls'], 0)
+        self.assertEqual(source['dispatches'], 1)
+        self.assertEqual(source['successful_http_responses'], 0)
+        self.assertEqual(source['reference_targets_successful'], 0)
+
+    def test_deferred_candidates_are_not_counted_as_queued_unvisited(self):
+        url = 'https://example.test/action'
+        candidates = [{'url': url, 'method': 'POST', 'source_records': [{'source': 'form', 'confidence': 'interface'}]}]
+        completion = {'unvisited': [{
+            'url': url, 'method': 'POST', 'queue_state': 'not_queued',
+            'source': 'form', 'reason': 'non_get_interface',
+        }]}
+
+        metrics = mode_metrics('basecrawler', candidates, [], {
+            'seconds': 1.0, 'status': 'completed', 'crawl_completion': completion,
+        })
+        source = source_execution_metrics(candidates, completion)['form']
+
+        self.assertEqual(metrics['unvisited'], 0)
+        self.assertEqual(metrics['not_scheduled'], 1)
+        self.assertEqual(metrics['not_scheduled_reasons'], {'non_get_interface': 1})
+        self.assertEqual(source['scheduled_method_urls'], 0)
+        self.assertEqual(source['unvisited_method_urls'], 0)
+        self.assertEqual(source['not_scheduled_method_urls'], 1)
+        self.assertEqual(source['not_scheduled_by_reason'], {'non_get_interface': 1})
+
     def test_source_execution_metrics_separate_discovery_attempt_success_and_unvisited(self):
         candidates = [
             {'url': 'https://example.test/ref', 'method': 'GET', 'sources': ['a', 'llms.txt'],

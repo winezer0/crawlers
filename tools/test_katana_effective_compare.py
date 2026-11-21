@@ -40,6 +40,18 @@ class ClassificationTests(unittest.TestCase):
         self.assertEqual(compare.classify(row, {'status': 0, 'error': 'timeout'}), 'unconfirmed_control')
         self.assertEqual(compare.classify(row, {'status': 404, 'sha256': 'different'}), 'valid_page')
 
+    def test_completed_html_server_error_can_be_a_negative_control(self):
+        row = self.row()
+        row['content_type'] = 'text/html'
+        control = {'status': 500, 'content_type': 'text/html', 'sha256': 'server-error-page'}
+
+        self.assertEqual(compare.classify(row, control), 'valid_page')
+        row['sha256'] = control['sha256']
+        self.assertEqual(compare.classify(row, control), 'html_fallback')
+        control['content_type'] = 'application/json'
+        row['sha256'] = 'page'
+        self.assertEqual(compare.classify(row, control), 'unconfirmed_control')
+
 
 class AcceptanceAndControlTests(unittest.TestCase):
     def test_discovery_coverage_requires_exact_method_and_url_not_alias(self):

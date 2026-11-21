@@ -36,7 +36,13 @@ BASE_MAX_URLS = 2000
 
 def usable_control(row):
     code = row.get('status', 0)
-    return (200 <= code < 300 or code in (404, 410)) and not row.get('error') and not row.get('truncated')
+    ordinary_control = 200 <= code < 300 or code in (404, 410)
+    completed_html_error = (
+        500 <= code < 600
+        and 'html' in str(row.get('content_type') or '').lower()
+        and bool(row.get('sha256'))
+    )
+    return (ordinary_control or completed_html_error) and not row.get('error') and not row.get('truncated')
 
 
 def parse_control_url_overrides(assignments):

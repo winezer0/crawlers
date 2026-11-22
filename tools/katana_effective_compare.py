@@ -32,6 +32,7 @@ ASSET = re.compile(r'\.(?:js|mjs|css|png|apng|avif|jpe?g|gif|svg|ico|webp|woff2?
 # Match Katana's per-host HTML-page cap separately from Basecrawler's total
 # request safety ceiling. A total-URL cap is not equivalent to Katana -mdp.
 BASE_MAX_URLS = 2000
+BASE_MAX_SEEN = 200000
 
 
 def usable_control(row):
@@ -361,13 +362,19 @@ def run_one(target, mode, args):
         page_limit = args.pages if base_pages is None else base_pages
         base_depth = getattr(args, 'base_depth_limit', None)
         depth_limit = args.depth if base_depth is None else base_depth
+        base_max_urls = getattr(args, 'base_max_urls', None)
+        max_urls = BASE_MAX_URLS if base_max_urls is None else base_max_urls
+        base_max_seen = getattr(args, 'base_max_seen', None)
+        max_seen = BASE_MAX_SEEN if base_max_seen is None else base_max_seen
         command = [str(args.base), '-u', target.seed, '-d', str(depth_limit), '-c', str(getattr(args, 'base_concurrency', 1)),
-                   '--max-urls', str(BASE_MAX_URLS), '--mdp', str(page_limit),
+                   '--max-urls', str(max_urls), '--mdp', str(page_limit),
                    '--timeout', '15', '--max-body', '16777216',
                    '--scope', 'fqdn', '--rl', str(rate_limit), '--ct', str(time_limit) + 's',
                    '--no-fuzz', '--no-testfill', '--no-probe-openapi', '--fsu', '-s', 'all',
                    '--stable-host-order', '-v', '--discoveries', str(folder / 'discoveries.jsonl'),
                    '--report', str(folder / 'report.json'), '-o', str(folder / 'results.jsonl')]
+        if base_max_seen is not None:
+            command += ['--max-seen', str(max_seen)]
         command += ['--strategy', args.strategy]
     else:
         command = [str(ROOT / 'othercrawlers/katana.exe'), '-u', target.seed, '-d', str(args.depth),
@@ -423,6 +430,8 @@ def run_one(target, mode, args):
               'time_limit_seconds': (getattr(args, 'base_seconds_limit', None) if getattr(args, 'base_seconds_limit', None) is not None else args.seconds) if mode == 'basecrawler' else args.seconds,
               'max_pages_per_host': (getattr(args, 'base_max_pages_per_host', None) if getattr(args, 'base_max_pages_per_host', None) is not None else args.pages) if mode == 'basecrawler' else args.pages,
                'max_depth': (getattr(args, 'base_depth_limit', None) if getattr(args, 'base_depth_limit', None) is not None else args.depth) if mode == 'basecrawler' else args.depth,
+               'max_urls': max_urls if mode == 'basecrawler' else None,
+               'max_seen': max_seen if mode == 'basecrawler' else None,
               'request_errors': sum(bool(r.get('error')) and r.get('error') != 'max depth reached' for r in raw_rows),
               'boundary_discoveries': sum(r.get('error') == 'max depth reached' for r in raw_rows)}
     write_json(folder / 'run.json', record)

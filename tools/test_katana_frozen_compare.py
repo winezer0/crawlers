@@ -49,7 +49,7 @@ class FrozenReferenceTests(unittest.TestCase):
             self.folder('reference/testasp/'+mode,['https://x/'])
         binary=self.root/'base.exe';binary.write_bytes(b'fixture')
         args=SimpleNamespace(reference=reference,targets='testasp',base=binary,output=self.root/'output',
-                              rounds=1,workers=1,resume=False,verify_only=False,base_concurrency=4,base_rate_limit=9,base_seconds_limit=20,base_max_pages_per_host=300,base_depth_limit=3,
+                              rounds=1,workers=1,resume=False,verify_only=False,base_concurrency=4,base_rate_limit=9,base_seconds_limit=20,base_max_pages_per_host=300,base_depth_limit=3,base_max_urls=0,base_max_seen=0,
                              control_urls={'testasp':'https://testasp.net/__control_missing'})
         manifest={'sites':{'testasp':{'settings':{'katana_sha256':'fixture','seconds':60,'pages':80,'depth':2,'rate':2,'strategy':'breadth-first','proxy':''}}}}
         with patch('katana_frozen_compare.validate_reference',return_value=manifest), \
@@ -65,6 +65,8 @@ class FrozenReferenceTests(unittest.TestCase):
         self.assertEqual(options.base_seconds_limit,20)
         self.assertEqual(options.base_max_pages_per_host,300)
         self.assertEqual(options.base_depth_limit,3)
+        self.assertEqual(options.base_max_urls,0)
+        self.assertEqual(options.base_max_seen,0)
         self.assertEqual(options.control_urls,args.control_urls)
         config=json.loads((args.output/'config.json').read_text(encoding='utf-8'))
         self.assertEqual(config['base_concurrency'],4)
@@ -72,6 +74,8 @@ class FrozenReferenceTests(unittest.TestCase):
         self.assertEqual(config['base_seconds_limit'],20)
         self.assertEqual(config['base_max_pages_per_host'],300)
         self.assertEqual(config['base_depth_limit'],3)
+        self.assertEqual(config['base_max_urls'],0)
+        self.assertEqual(config['base_max_seen'],0)
         self.assertEqual(config['control_urls'],args.control_urls)
 
     def test_summary_separates_reference_coverage_and_crawl_completion(self):

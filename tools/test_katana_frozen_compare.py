@@ -5,7 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from katana_frozen_compare import freeze, select_maximum, validate_reference, run, summarize
+from katana_frozen_compare import freeze, select_maximum, validate_reference, run, summarize, compare_saved
 
 
 class FrozenReferenceTests(unittest.TestCase):
@@ -79,6 +79,36 @@ class FrozenReferenceTests(unittest.TestCase):
         self.assertEqual(config['base_max_seen'],0)
         self.assertEqual(config['base_resource_depth'],0)
         self.assertEqual(config['control_urls'],args.control_urls)
+
+    def test_compare_saved_accepts_a_single_site_run_directory(self):
+        reference = self.root / 'reference'
+        reference.mkdir()
+        for mode in ['katana-static', 'katana-browser']:
+            (reference / 'testasp' / mode).mkdir(parents=True)
+        source = self.root / 'round-01' / 'testasp'
+        (source / 'basecrawler').mkdir(parents=True)
+        (source / 'basecrawler' / 'run.json').write_text(json.dumps({
+            'status': 'completed', 'seconds': 12,
+        }), encoding='utf-8')
+        output = self.root / 'saved-comparison'
+        args = SimpleNamespace(
+            reference=reference, source=[source], output=output, resume=False,
+            targets='testasp', control_urls={}, offline=True,
+        )
+        manifest = {'sites': {'testasp': {'settings': {'katana_sha256': 'fixture'}}}}
+
+        with patch('katana_frozen_compare.validate_reference', return_value=manifest), \
+             patch('katana_frozen_compare.bench.verify_site') as verify, \
+             patch('katana_frozen_compare.summarize') as summarize_result:
+            compare_saved(args)
+
+        self.assertEqual(verify.call_count, 1)
+        summarize_result.assert_called_once()
+        saved_run = output / 'round-01' / 'testasp' / 'basecrawler' / 'run.json'
+        self.assertTrue(saved_run.exists())
+        self.assertTrue((output / 'round-01' / 'testasp' / 'katana-static').exists())
+        config = json.loads((output / 'config.json').read_text(encoding='utf-8'))
+        self.assertEqual(config['saved_sources'], [str(source.resolve())])
 
     def test_summary_separates_reference_coverage_and_crawl_completion(self):
         output = self.root / 'comparison'

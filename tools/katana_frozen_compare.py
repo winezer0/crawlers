@@ -315,7 +315,8 @@ def compare_saved(args):
         raise ValueError('Choose a new saved-comparison output directory')
     sites = {}
     for source in args.source:
-        for folder in sorted(source.glob('round-*/*')):
+        folders = [source] if (source / 'basecrawler' / 'run.json').exists() else sorted(source.glob('round-*/*'))
+        for folder in folders:
             if getattr(args,'targets','') and folder.name not in args.targets.split(','):
                 continue
             if folder.name in manifest['sites'] and (folder / 'basecrawler/run.json').exists():

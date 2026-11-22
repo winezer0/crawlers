@@ -366,6 +366,8 @@ def run_one(target, mode, args):
         max_urls = BASE_MAX_URLS if base_max_urls is None else base_max_urls
         base_max_seen = getattr(args, 'base_max_seen', None)
         max_seen = BASE_MAX_SEEN if base_max_seen is None else base_max_seen
+        base_resource_depth = getattr(args, 'base_resource_depth', None)
+        resource_depth = 4 if base_resource_depth is None else base_resource_depth
         command = [str(args.base), '-u', target.seed, '-d', str(depth_limit), '-c', str(getattr(args, 'base_concurrency', 1)),
                    '--max-urls', str(max_urls), '--mdp', str(page_limit),
                    '--timeout', '15', '--max-body', '16777216',
@@ -375,6 +377,8 @@ def run_one(target, mode, args):
                    '--report', str(folder / 'report.json'), '-o', str(folder / 'results.jsonl')]
         if base_max_seen is not None:
             command += ['--max-seen', str(max_seen)]
+        if base_resource_depth is not None:
+            command += ['--resource-depth', str(resource_depth)]
         command += ['--strategy', args.strategy]
     else:
         command = [str(ROOT / 'othercrawlers/katana.exe'), '-u', target.seed, '-d', str(args.depth),
@@ -432,6 +436,7 @@ def run_one(target, mode, args):
                'max_depth': (getattr(args, 'base_depth_limit', None) if getattr(args, 'base_depth_limit', None) is not None else args.depth) if mode == 'basecrawler' else args.depth,
                'max_urls': max_urls if mode == 'basecrawler' else None,
                'max_seen': max_seen if mode == 'basecrawler' else None,
+               'resource_depth': resource_depth if mode == 'basecrawler' else None,
               'request_errors': sum(bool(r.get('error')) and r.get('error') != 'max depth reached' for r in raw_rows),
               'boundary_discoveries': sum(r.get('error') == 'max depth reached' for r in raw_rows)}
     write_json(folder / 'run.json', record)

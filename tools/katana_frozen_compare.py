@@ -87,7 +87,7 @@ def validate_reference(reference):
     return manifest
 
 
-def summarize(output, targets, rounds, base_concurrency=1, base_rate_limit=None, base_seconds_limit=None, base_max_pages_per_host=None, base_depth_limit=None, base_max_urls=None, base_max_seen=None):
+def summarize(output, targets, rounds, base_concurrency=1, base_rate_limit=None, base_seconds_limit=None, base_max_pages_per_host=None, base_depth_limit=None, base_max_urls=None, base_max_seen=None, base_resource_depth=None):
     sites = []
     for target in targets:
         reports = [read(output / f'round-{n:02}' / target.site_id / 'effective.json') for n in range(1, rounds + 1)]
@@ -117,6 +117,7 @@ def summarize(output, targets, rounds, base_concurrency=1, base_rate_limit=None,
                        'base_depth_limit': base_depth_limit,
                        'base_max_urls': base_max_urls,
                        'base_max_seen': base_max_seen,
+                       'base_resource_depth': base_resource_depth,
                       'reference_seconds': {m: reports[0]['runs'][m]['seconds'] for m in bench.MODES[1:]},
                       'base_stability': stability, 'missing': [r['missing'] for r in reports],
                       'passed': rounds >= 3 and stability >= .9 and all(r['passed'] for r in reports)})
@@ -128,6 +129,7 @@ def summarize(output, targets, rounds, base_concurrency=1, base_rate_limit=None,
               'base_depth_limit': base_depth_limit,
               'base_max_urls': base_max_urls,
               'base_max_seen': base_max_seen,
+              'base_resource_depth': base_resource_depth,
               'passed_sites': sum(s['passed'] for s in sites), 'rounds': rounds,
               'goal_met': sum(s['passed'] for s in sites) >= math.ceil(.8 * len(sites)),
               'reference_coverage_passed_sites': sum(all(s['execution_coverage_passed']) for s in sites),
@@ -151,8 +153,8 @@ def summarize(output, targets, rounds, base_concurrency=1, base_rate_limit=None,
             m = metric['modes']['basecrawler']
             lines.append(f"| {s['site']} | {n} | {m['discovered_method_urls']} | {m['observed_successful_method_urls']} | {m['requests_attempted']} | {m['analysis_failures']} | {m['unvisited']} | {m.get('not_scheduled', 0)} | {m['seconds']:.2f} |")
     lines += ['', '## Discovery, request execution, and completion', '',
-              '| Site | Base c | Base depth | Base QPS limit | Base time limit (s) | Base page cap | Base max URLs | Base max seen | Round | All-method discovery | App non-GET found/targets | Telemetry excluded | Exact successful GET | GET >=95% | Crawl complete | Strict pass | Unvisited | Strict failure reasons |',
-              '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---|---:|---|']
+              '| Site | Base c | Base depth | Resource depth | Base QPS limit | Base time limit (s) | Base page cap | Base max URLs | Base max seen | Round | All-method discovery | App non-GET found/targets | Telemetry excluded | Exact successful GET | GET >=95% | Crawl complete | Strict pass | Unvisited | Strict failure reasons |',
+              '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---|---:|---|']
     for s in sites:
         for n, metric in enumerate(s['metrics'], 1):
             m = metric['modes']['basecrawler']
@@ -164,7 +166,7 @@ def summarize(output, targets, rounds, base_concurrency=1, base_rate_limit=None,
             non_get = f"{execution.get('non_get_discovered_targets', 0)}/{execution.get('non_get_reference_targets', 0)}"
             telemetry_excluded = str(execution.get('excluded_non_get_telemetry_targets', 0))
             failures = s['strict_failure_reasons'][n-1] if n-1 < len(s['strict_failure_reasons']) else []
-            lines.append(f"| {s['site']} | {s['base_concurrency']} | {s['base_depth_limit'] if s['base_depth_limit'] is not None else 'reference'} | {s['base_rate_limit'] if s['base_rate_limit'] is not None else 'reference'} | {s['base_seconds_limit'] if s['base_seconds_limit'] is not None else 'reference'} | {s['base_max_pages_per_host'] if s['base_max_pages_per_host'] is not None else 'reference'} | {s['base_max_urls'] if s['base_max_urls'] is not None else 'default'} | {s['base_max_seen'] if s['base_max_seen'] is not None else 'default'} | {n} | {discovery_text} | {non_get} | {telemetry_excluded} | {success_text} | {s['execution_coverage_passed'][n-1]} | {s['crawl_complete'][n-1]} | {s['strict_passed'][n-1]} | {m['unvisited']} | {', '.join(failures) or 'none'} |")
+            lines.append(f"| {s['site']} | {s['base_concurrency']} | {s['base_depth_limit'] if s['base_depth_limit'] is not None else 'reference'} | {s['base_resource_depth'] if s['base_resource_depth'] is not None else 'default'} | {s['base_rate_limit'] if s['base_rate_limit'] is not None else 'reference'} | {s['base_seconds_limit'] if s['base_seconds_limit'] is not None else 'reference'} | {s['base_max_pages_per_host'] if s['base_max_pages_per_host'] is not None else 'reference'} | {s['base_max_urls'] if s['base_max_urls'] is not None else 'default'} | {s['base_max_seen'] if s['base_max_seen'] is not None else 'default'} | {n} | {discovery_text} | {non_get} | {telemetry_excluded} | {success_text} | {s['execution_coverage_passed'][n-1]} | {s['crawl_complete'][n-1]} | {s['strict_passed'][n-1]} | {m['unvisited']} | {', '.join(failures) or 'none'} |")
     lines += ['', f"Reference execution >=95% sites: {result['reference_coverage_passed_sites']}/{len(sites)}; "
               f"fully completed crawls: {result['crawl_complete_sites']}/{len(sites)}; "
               f"strict passes: {result['strict_passed_sites']}/{len(sites)}."]
@@ -256,6 +258,9 @@ def run(args):
     base_max_seen = getattr(args, 'base_max_seen', None)
     if base_max_seen is not None and base_max_seen < 0:
         raise ValueError('Basecrawler seen-set cap must be zero (unlimited) or positive')
+    base_resource_depth = getattr(args, 'base_resource_depth', None)
+    if base_resource_depth is not None and base_resource_depth < 0:
+        raise ValueError('Basecrawler resource depth must be zero (navigation depth) or positive')
     control_urls = getattr(args, 'control_urls', {})
     config = {'reference': str(args.reference.resolve()), 'reference_sha256': digest(args.reference / 'frozen.json'),
               'scoring_sha256':scoring_fingerprint(),
@@ -266,6 +271,7 @@ def run(args):
               'base_depth_limit': base_depth_limit,
               'base_max_urls': base_max_urls,
               'base_max_seen': base_max_seen,
+              'base_resource_depth': base_resource_depth,
               'control_urls': control_urls}
     if (args.output / 'config.json').exists():
         if not args.resume or read(args.output / 'config.json') != config:
@@ -282,6 +288,7 @@ def run(args):
                                        base_depth_limit=base_depth_limit,
                                        base_max_urls=base_max_urls,
                                        base_max_seen=base_max_seen,
+                                       base_resource_depth=base_resource_depth,
                                       control_urls=control_urls,
                                       verify_timeout=12, verify_workers=4, verify_limit=0)
             folder = options.output / site
@@ -295,7 +302,7 @@ def run(args):
             bench.verify_site(target, options)
         with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as pool:
             list(pool.map(run_site, targets))
-    summarize(args.output, targets, args.rounds, base_concurrency, base_rate_limit, base_seconds_limit, base_max_pages_per_host, base_depth_limit, base_max_urls, base_max_seen)
+    summarize(args.output, targets, args.rounds, base_concurrency, base_rate_limit, base_seconds_limit, base_max_pages_per_host, base_depth_limit, base_max_urls, base_max_seen, base_resource_depth)
 
 
 def compare_saved(args):
@@ -337,7 +344,7 @@ def compare_saved(args):
         summarize(args.output, [bench.common.TARGETS[site] for site in sorted(sites)], rounds,
                   first_run.get('concurrency', 1), first_run.get('rate_limit'),
                   first_run.get('time_limit_seconds'), first_run.get('max_pages_per_host'),
-                  first_run.get('max_depth'), first_run.get('max_urls'), first_run.get('max_seen'))
+                  first_run.get('max_depth'), first_run.get('max_urls'), first_run.get('max_seen'), first_run.get('resource_depth'))
 
 
 if __name__ == '__main__':
@@ -360,6 +367,8 @@ if __name__ == '__main__':
                    help='Basecrawler request cap; defaults to 2000. Use 0 for unlimited.')
     r.add_argument('--base-max-seen', type=int, default=None,
                    help='Basecrawler seen/source-edge cap; defaults to 200000. Use 0 for unlimited.')
+    r.add_argument('--base-resource-depth', type=int, default=None,
+                   help='Basecrawler resource dependency depth; defaults to 4. Use 0 to follow navigation depth.')
     r.add_argument('--control-url', action='append', default=[], metavar='SITE_ID=URL')
     r.add_argument('--resume', action='store_true'); r.add_argument('--verify-only', action='store_true')
     c = sub.add_parser('compare-saved'); c.add_argument('--reference', type=Path, required=True)

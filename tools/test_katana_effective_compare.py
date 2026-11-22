@@ -317,7 +317,7 @@ class RunnerProfileTests(unittest.TestCase):
             binary.write_bytes(b'fixture')
             args = SimpleNamespace(
                 output=root / 'output', base=binary, depth=2, base_depth_limit=3, base_concurrency=4, base_rate_limit=9, base_seconds_limit=20, base_max_pages_per_host=300,
-                base_max_urls=0, base_max_seen=0,
+                base_max_urls=0, base_max_seen=0, base_resource_depth=0,
                 pages=20, rate=2, seconds=10, strategy='breadth-first', proxy='', resume=False,
             )
             target = SimpleNamespace(site_id='fixture', seed='https://example.test/', allowed_hosts=('example.test',))
@@ -332,6 +332,7 @@ class RunnerProfileTests(unittest.TestCase):
             self.assertEqual(command[command.index('-d') + 1], '3')
             self.assertEqual(command[command.index('--max-urls') + 1], '0')
             self.assertEqual(command[command.index('--max-seen') + 1], '0')
+            self.assertEqual(command[command.index('--resource-depth') + 1], '0')
             self.assertEqual(record['concurrency'], 4)
             self.assertEqual(record['rate_limit'], 9)
             self.assertEqual(record['time_limit_seconds'], 20)
@@ -339,6 +340,7 @@ class RunnerProfileTests(unittest.TestCase):
             self.assertEqual(record['max_depth'], 3)
             self.assertEqual(record['max_urls'], 0)
             self.assertEqual(record['max_seen'], 0)
+            self.assertEqual(record['resource_depth'], 0)
             self.assertEqual(run.call_args.kwargs['timeout'], 80)
 
 

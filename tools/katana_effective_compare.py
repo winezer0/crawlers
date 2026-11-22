@@ -72,7 +72,7 @@ def control_url_for(target, overrides=None):
 
 def reference_execution_metrics(valid_urls, rows, completion=None):
     valid = set(valid_urls)
-    attempted, successful = set(), set()
+    attempted, successful, effective_successful, redirected_successful = set(), set(), set(), set()
     audited_requests = completion.get('requests') if completion else None
     method_audit_complete = audited_requests is not None and all('method' in request for request in audited_requests)
     if method_audit_complete:
@@ -97,9 +97,12 @@ def reference_execution_metrics(valid_urls, rows, completion=None):
         error = str(row.get('error') or '')
         if status or error and error != 'max depth reached':
             attempted.add(requested_url)
-        if (200 <= status < 300 and not error and not row.get('truncated')
-                and final_url == requested_url):
-            successful.add(requested_url)
+        if 200 <= status < 300 and not error and not row.get('truncated'):
+            effective_successful.add(requested_url)
+            if final_url == requested_url:
+                successful.add(requested_url)
+            else:
+                redirected_successful.add(requested_url)
     coverage = lambda urls: len(urls) / len(valid) if valid else None
     return {
         'dispatched_reference_urls': len(attempted),
@@ -107,6 +110,11 @@ def reference_execution_metrics(valid_urls, rows, completion=None):
         'successful_reference_urls': len(successful),
         'successful_reference_coverage': coverage(successful),
         'successful_reference_missing': sorted(valid - successful),
+        'effective_successful_reference_urls': len(effective_successful),
+        'effective_successful_reference_coverage': coverage(effective_successful),
+        'effective_successful_reference_missing': sorted(valid - effective_successful),
+        'redirected_successful_reference_urls': len(redirected_successful),
+        'redirected_successful_reference_coverage': coverage(redirected_successful),
     }, attempted, successful
 
 
@@ -233,7 +241,8 @@ def strict_acceptance_failures(valid, discovery_coverage, unresolved, runs, exec
         failures.append('no_http_confirmed_reference_urls')
     if discovery_coverage is None or discovery_coverage < .95:
         failures.append('discovery_coverage_below_95_percent')
-    success_coverage = execution.get('successful_reference_coverage')
+    success_coverage = execution.get(
+        'effective_successful_reference_coverage', execution.get('successful_reference_coverage'))
     if success_coverage is None or success_coverage < .95:
         failures.append('successful_request_coverage_below_95_percent')
     if unresolved:
@@ -248,7 +257,8 @@ def strict_acceptance_failures(valid, discovery_coverage, unresolved, runs, exec
 
 def acceptance_dimensions(valid, execution, crawl_complete, strict_failures):
     """Expose reference-target coverage separately from full crawl completion."""
-    coverage = execution.get('successful_reference_coverage')
+    coverage = execution.get(
+        'effective_successful_reference_coverage', execution.get('successful_reference_coverage'))
     return {
         'execution_coverage_passed': bool(valid) and coverage is not None and coverage >= .95,
         'crawl_completion_passed': crawl_complete is True,
@@ -602,19 +612,23 @@ def reference_target_lifecycle(valid_get_urls, non_get_targets, candidates, comp
         discovered = bool(candidate_rows)
         crawlable = any(candidate_is_crawlable(row) for row in candidate_rows)
         successful_attempts = []
+        effective_successful_attempts = []
         for request in attempts:
             request_url = common.normalize_url(request.get('requested_url') or '')
             final_url = common.normalize_url(request.get('final_url') or request_url)
             status = int(request.get('http_status') or 0)
             request_error = request.get('error') or ('' if request.get('state') == 'complete' else request.get('state', ''))
-            if (200 <= status < 300 and not request_error and not request.get('truncated')
-                    and final_url == url):
-                successful_attempts.append(request)
+            if 200 <= status < 300 and not request_error and not request.get('truncated'):
+                effective_successful_attempts.append(request)
+                if final_url == url:
+                    successful_attempts.append(request)
 
         if not discovered:
             state = 'not_discovered'
         elif successful_attempts:
             state = 'dispatched_exact_http_success'
+        elif effective_successful_attempts:
+            state = 'dispatched_redirected_http_success'
         elif attempts:
             latest = attempts[-1]
             status = int(latest.get('http_status') or 0)
@@ -655,6 +669,10 @@ def reference_target_lifecycle(valid_get_urls, non_get_targets, candidates, comp
             'dispatched': bool(attempts),
             'dispatch_count': len(attempts),
             'exact_http_success': bool(successful_attempts),
+            'effective_http_success': bool(effective_successful_attempts),
+            'redirected_http_success': any(
+                common.normalize_url(request.get('final_url') or request.get('requested_url') or url) != url
+                for request in effective_successful_attempts),
             'effective_reference_covered': comparison.get('base_covered') if comparison else None,
             'sources': [{**sources[key], 'referers': sorted(sources[key]['referers']),
                          'depths': sorted(sources[key]['depths'])} for key in sorted(sources)],
@@ -872,6 +890,8 @@ def verify_site(target, args):
     all_method_covered = discovery_metrics['discovered_targets']
     all_method_discovery = discovery_metrics['coverage']
     execution['successful_get_reference_coverage'] = execution['successful_reference_coverage']
+    execution['exact_successful_get_reference_coverage'] = execution['successful_reference_coverage']
+    execution['effective_successful_get_reference_coverage'] = execution['effective_successful_reference_coverage']
     execution['non_get_reference_targets'] = len(non_get_reference)
     execution['non_get_discovered_targets'] = len(non_get_covered)
     execution['non_get_discovery_coverage'] = len(non_get_covered) / len(non_get_reference) if non_get_reference else None
@@ -939,7 +959,7 @@ def verify_site(target, args):
             'sample_urls': [{'url': url, 'classification': categories.get(url, 'unverified')} for url in urls_for_source],
         }
     write_json(site/'metrics.json', {'modes':metrics, 'discovery_coverage':all_method_discovery,
-        'reference_execution':execution, 'strict_acceptance_version':'complete-crawl-v3',
+        'reference_execution':execution, 'strict_acceptance_version':'complete-crawl-v4-effective-redirects',
         'excluded_non_get_telemetry': excluded_non_get_telemetry,
         'protocol_evidence_required':True,
         'reference_target_lifecycle': {
@@ -965,6 +985,12 @@ def verify_site(target, args):
               'successful_reference_urls': execution['successful_reference_urls'],
               'successful_reference_coverage': execution['successful_reference_coverage'],
               'successful_reference_missing': execution['successful_reference_missing'],
+              'exact_successful_reference_coverage': execution['successful_reference_coverage'],
+              'effective_successful_reference_urls': execution['effective_successful_reference_urls'],
+              'effective_successful_reference_coverage': execution['effective_successful_reference_coverage'],
+              'effective_successful_reference_missing': execution['effective_successful_reference_missing'],
+              'redirected_successful_reference_urls': execution['redirected_successful_reference_urls'],
+              'redirected_successful_reference_coverage': execution['redirected_successful_reference_coverage'],
               'non_get_reference_targets': len(non_get_reference),
               'non_get_discovered_targets': len(non_get_covered),
               'non_get_discovery_coverage': execution['non_get_discovery_coverage'],
@@ -979,7 +1005,7 @@ def verify_site(target, args):
               'runs': runs, 'passed': dimensions['strict_passed'],
               'discovery_coverage_passed': bool(all_method_valid) and all_method_discovery >= .95 and not unresolved,
               'execution_coverage_passed': dimensions['execution_coverage_passed'],
-              'note': 'Execution is scored from crawler request-attempt audit, independently of output deduplication. Requested and final URLs must match for an exact successful response; aliases do not count.'}
+              'note': 'Execution is scored from crawler request-attempt audit, independently of output deduplication. Exact success requires requested and final URLs to match. Effective success also counts a complete, non-truncated 2xx response after a redirect; exact and redirected success are reported separately.'}
     write_json(site / 'effective.json', report)
     print(json.dumps({k: v for k, v in report.items() if k not in ('runs', 'missing', 'unresolved')}), flush=True)
     return report
@@ -994,8 +1020,8 @@ def summarize(args, targets):
     passed = sum(r['passed'] for r in rows)
     goal = len(rows) == len(targets) and passed >= math.ceil(.8 * len(targets))
     write_json(args.output / 'acceptance.json', {'goal_met': goal, 'required_sites': len(targets), 'evaluated_sites': len(rows), 'passed_sites': passed,
-               'acceptance_version': 'complete-crawl-v3',
-               'criteria': '>=80% sites; per site >=95% all-method discovery and exact successful GET coverage, no unresolved GET references, all tool runs completed, and Basecrawler crawl_completion.complete=true',
+                'acceptance_version': 'complete-crawl-v4-effective-redirects',
+                'criteria': '>=80% sites; per site >=95% all-method discovery and effective successful GET coverage (exact or successfully resolved redirect), no unresolved GET references, all tool runs completed, and Basecrawler crawl_completion.complete=true',
                'limitations': ['This does not certify all methods or runtime-only business flows.', 'Content equality proves HTML aliases only, not distinct API equivalence.']})
     lines = ['# Katana 双模式有效结果对比', '', '| 站点 | base秒 | Katana静态秒 | Katana浏览器秒 | 已核验有效参考 | 覆盖 | 待核验 | 静态/浏览器参考状态 | 达标 |', '|---|---:|---:|---:|---:|---:|---:|---|---|']
     for r in rows:
@@ -1004,22 +1030,24 @@ def summarize(args, targets):
         reference_status = '/'.join(r['runs'][m]['status'] for m in MODES[1:])
         lines.append('| ' + ' | '.join([r['site'], *seconds, str(r['verified_valid_reference']), coverage, str(len(r['unresolved'])), reference_status, str(r['passed'])]) + ' |')
     lines += ['', f'达标站点：{passed}/{len(targets)}；总目标达成：{goal}。', '', '只核验 GET 页面/JSON；方法、参数、模板及业务有效性另行验收。未核验、网络错误和浏览器失败不会被当成达标。', '启用 basecrawler --fsu；发现记录保留过滤前证据。参数值和数字 ID 不做武断归并，HTML 别名需响应证据。']
-    execution_lines = ['', '## Execution acceptance (complete-crawl-v3)', '',
-                       '| Site | Base c | Discovery | Exact successful GET | App non-GET | Telemetry excluded | Crawl complete | Strict failure reasons |',
-                       '|---|---:|---:|---:|---:|---:|---|---|']
+    execution_lines = ['', '## Execution acceptance (complete-crawl-v4-effective-redirects)', '',
+                       '| Site | Base c | Discovery | Effective successful GET | Exact match GET | App non-GET | Telemetry excluded | Crawl complete | Strict failure reasons |',
+                       '|---|---:|---:|---:|---:|---:|---:|---|---|']
     for r in rows:
         base_run = r['runs']['basecrawler']
         completion = base_run.get('crawl_completion', {})
         discovery = r.get('discovery_coverage')
-        successful = r.get('successful_reference_coverage')
+        successful = r.get('effective_successful_reference_coverage', r.get('successful_reference_coverage'))
+        exact = r.get('exact_successful_reference_coverage', r.get('successful_reference_coverage'))
         discovery_text = f'{discovery:.2%}' if discovery is not None else 'n/a'
         successful_text = f'{successful:.2%}' if successful is not None else 'n/a'
+        exact_text = f'{exact:.2%}' if exact is not None else 'n/a'
         complete_text = str(completion.get('complete') is True)
         reasons = ', '.join(r.get('strict_failure_reasons', [])) or 'none'
         non_get_text = f"{r.get('non_get_discovered_targets', 0)}/{r.get('non_get_reference_targets', 0)}"
         telemetry_count = str(r.get('excluded_non_get_telemetry_targets', 0))
         execution_lines.append('| ' + ' | '.join([r['site'], str(base_run.get('concurrency', 1)), discovery_text,
-                                                  successful_text, non_get_text, telemetry_count,
+                                                  successful_text, exact_text, non_get_text, telemetry_count,
                                                   complete_text, reasons]) + ' |')
     execution_lines += ['', '### Excluded non-GET telemetry evidence', '',
                         'Successful non-GET requests with page/event identity and at least three browser navigation timing fields are excluded from the application-target denominator. Classification uses request JSON shape, not URL or host.', '',

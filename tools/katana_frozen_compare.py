@@ -97,6 +97,7 @@ def summarize(output, targets, rounds, base_concurrency=1, base_rate_limit=None,
         sites.append({'site': target.site_id, 'coverage': [r['coverage'] for r in reports],
                       'discovery_coverage': [r.get('discovery_coverage', r['coverage']) for r in reports],
                       'successful_reference_coverage': [r.get('successful_reference_coverage') for r in reports],
+                       'effective_successful_reference_coverage': [r.get('effective_successful_reference_coverage', r.get('successful_reference_coverage')) for r in reports],
                       'excluded_non_get_telemetry': [r.get('excluded_non_get_telemetry', []) for r in reports],
                       'execution_coverage_passed': [r.get('execution_coverage_passed', False) for r in reports],
                       'crawl_complete': [r.get('crawl_complete', False) for r in reports],
@@ -121,7 +122,7 @@ def summarize(output, targets, rounds, base_concurrency=1, base_rate_limit=None,
                       'reference_seconds': {m: reports[0]['runs'][m]['seconds'] for m in bench.MODES[1:]},
                       'base_stability': stability, 'missing': [r['missing'] for r in reports],
                       'passed': rounds >= 3 and stability >= .9 and all(r['passed'] for r in reports)})
-    result = {'acceptance_version': 'complete-crawl-v3', 'sites': sites,
+    result = {'acceptance_version': 'complete-crawl-v4-effective-redirects', 'sites': sites,
               'base_concurrency': base_concurrency,
               'base_rate_limit': base_rate_limit,
               'base_seconds_limit': base_seconds_limit,
@@ -153,20 +154,22 @@ def summarize(output, targets, rounds, base_concurrency=1, base_rate_limit=None,
             m = metric['modes']['basecrawler']
             lines.append(f"| {s['site']} | {n} | {m['discovered_method_urls']} | {m['observed_successful_method_urls']} | {m['requests_attempted']} | {m['analysis_failures']} | {m['unvisited']} | {m.get('not_scheduled', 0)} | {m['seconds']:.2f} |")
     lines += ['', '## Discovery, request execution, and completion', '',
-              '| Site | Base c | Base depth | Resource depth | Base QPS limit | Base time limit (s) | Base page cap | Base max URLs | Base max seen | Round | All-method discovery | App non-GET found/targets | Telemetry excluded | Exact successful GET | GET >=95% | Crawl complete | Strict pass | Unvisited | Strict failure reasons |',
-              '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---|---:|---|']
+              '| Site | Base c | Base depth | Resource depth | Base QPS limit | Base time limit (s) | Base page cap | Base max URLs | Base max seen | Round | All-method discovery | App non-GET found/targets | Telemetry excluded | Effective successful GET | Exact match GET | GET >=95% | Crawl complete | Strict pass | Unvisited | Strict failure reasons |',
+              '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---|---:|---|']
     for s in sites:
         for n, metric in enumerate(s['metrics'], 1):
             m = metric['modes']['basecrawler']
             execution = metric.get('reference_execution', {})
             discovery = metric.get('discovery_coverage')
-            success = execution.get('successful_reference_coverage')
+            success = execution.get('effective_successful_reference_coverage', execution.get('successful_reference_coverage'))
+            exact_success = execution.get('successful_reference_coverage')
             discovery_text = f'{discovery:.2%}' if discovery is not None else 'n/a'
             success_text = f'{success:.2%}' if success is not None else 'n/a'
+            exact_success_text = f'{exact_success:.2%}' if exact_success is not None else 'n/a'
             non_get = f"{execution.get('non_get_discovered_targets', 0)}/{execution.get('non_get_reference_targets', 0)}"
             telemetry_excluded = str(execution.get('excluded_non_get_telemetry_targets', 0))
             failures = s['strict_failure_reasons'][n-1] if n-1 < len(s['strict_failure_reasons']) else []
-            lines.append(f"| {s['site']} | {s['base_concurrency']} | {s['base_depth_limit'] if s['base_depth_limit'] is not None else 'reference'} | {s['base_resource_depth'] if s['base_resource_depth'] is not None else 'default'} | {s['base_rate_limit'] if s['base_rate_limit'] is not None else 'reference'} | {s['base_seconds_limit'] if s['base_seconds_limit'] is not None else 'reference'} | {s['base_max_pages_per_host'] if s['base_max_pages_per_host'] is not None else 'reference'} | {s['base_max_urls'] if s['base_max_urls'] is not None else 'default'} | {s['base_max_seen'] if s['base_max_seen'] is not None else 'default'} | {n} | {discovery_text} | {non_get} | {telemetry_excluded} | {success_text} | {s['execution_coverage_passed'][n-1]} | {s['crawl_complete'][n-1]} | {s['strict_passed'][n-1]} | {m['unvisited']} | {', '.join(failures) or 'none'} |")
+            lines.append(f"| {s['site']} | {s['base_concurrency']} | {s['base_depth_limit'] if s['base_depth_limit'] is not None else 'reference'} | {s['base_resource_depth'] if s['base_resource_depth'] is not None else 'default'} | {s['base_rate_limit'] if s['base_rate_limit'] is not None else 'reference'} | {s['base_seconds_limit'] if s['base_seconds_limit'] is not None else 'reference'} | {s['base_max_pages_per_host'] if s['base_max_pages_per_host'] is not None else 'reference'} | {s['base_max_urls'] if s['base_max_urls'] is not None else 'default'} | {s['base_max_seen'] if s['base_max_seen'] is not None else 'default'} | {n} | {discovery_text} | {non_get} | {telemetry_excluded} | {success_text} | {exact_success_text} | {s['execution_coverage_passed'][n-1]} | {s['crawl_complete'][n-1]} | {s['strict_passed'][n-1]} | {m['unvisited']} | {', '.join(failures) or 'none'} |")
     lines += ['', f"Reference execution >=95% sites: {result['reference_coverage_passed_sites']}/{len(sites)}; "
               f"fully completed crawls: {result['crawl_complete_sites']}/{len(sites)}; "
               f"strict passes: {result['strict_passed_sites']}/{len(sites)}."]

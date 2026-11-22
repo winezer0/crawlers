@@ -172,6 +172,7 @@ class AcceptanceAndControlTests(unittest.TestCase):
         self.assertEqual(metrics['dispatched_reference_coverage'], 2 / 3)
         self.assertEqual(metrics['successful_reference_urls'], 1)
         self.assertEqual(metrics['successful_reference_coverage'], 1 / 3)
+        self.assertEqual(metrics['effective_successful_reference_coverage'], 1 / 3)
 
     def test_completion_audit_counts_fsu_filtered_requests_but_rejects_aliases(self):
         valid = {
@@ -197,6 +198,28 @@ class AcceptanceAndControlTests(unittest.TestCase):
             'https://example.test/a', 'https://example.test/b', 'https://example.test/d'})
         self.assertEqual(successful, {'https://example.test/a'})
         self.assertEqual(metrics['successful_reference_coverage'], 1 / 4)
+        self.assertEqual(metrics['effective_successful_reference_urls'], 2)
+        self.assertEqual(metrics['effective_successful_reference_coverage'], 2 / 4)
+        self.assertEqual(metrics['redirected_successful_reference_urls'], 1)
+
+    def test_successful_redirect_counts_as_effective_but_not_exact_coverage(self):
+        valid = {'https://example.test/a', 'https://example.test/b', 'https://example.test/c'}
+        completion = {'requests': [
+            {'requested_url': 'https://example.test/a', 'final_url': 'https://example.test/a',
+             'method': 'GET', 'http_status': 200, 'state': 'complete'},
+            {'requested_url': 'https://example.test/b', 'final_url': 'https://example.test/docs/b',
+             'method': 'GET', 'http_status': 200, 'state': 'complete'},
+            {'requested_url': 'https://example.test/c', 'final_url': 'https://example.test/c',
+             'method': 'GET', 'http_status': 404, 'state': 'complete'},
+        ]}
+
+        metrics, _, exact_successful = compare.reference_execution_metrics(valid, [], completion)
+
+        self.assertEqual(exact_successful, {'https://example.test/a'})
+        self.assertEqual(metrics['successful_reference_coverage'], 1 / 3)
+        self.assertEqual(metrics['effective_successful_reference_coverage'], 2 / 3)
+        self.assertEqual(metrics['effective_successful_reference_missing'], ['https://example.test/c'])
+        self.assertEqual(metrics['redirected_successful_reference_urls'], 1)
 
     def test_truncated_completion_response_is_not_successful_reference_coverage(self):
         valid = {'https://example.test/a', 'https://example.test/b'}
@@ -245,12 +268,30 @@ class AcceptanceAndControlTests(unittest.TestCase):
 
         self.assertEqual(by_url[urls['success']]['state'], 'dispatched_exact_http_success')
         self.assertTrue(by_url[urls['success']]['effective_reference_covered'])
+        self.assertTrue(by_url[urls['success']]['effective_http_success'])
+        self.assertFalse(by_url[urls['success']]['redirected_http_success'])
         self.assertEqual(by_url[urls['pending']]['state'], 'queued_not_dispatched')
         self.assertEqual(by_url[urls['pending']]['unvisited'][0]['reason'], 'timeout')
         self.assertEqual(by_url[urls['clue']]['state'], 'discovered_non_crawlable')
         self.assertEqual(by_url[urls['dropped']]['state'], 'discovered_not_scheduled_reason_unknown')
         self.assertEqual(by_url[urls['missing']]['state'], 'not_discovered')
         self.assertEqual(by_url[urls['post']]['state'], 'discovered_interface_not_sent')
+
+    def test_lifecycle_distinguishes_successful_redirect_from_exact_success(self):
+        requested = 'https://example.test/old'
+        final = 'https://example.test/new'
+        candidates = [{'url': requested, 'method': 'GET', 'source_records': [{'source': 'a'}]}]
+        completion = {'requests': [{
+            'requested_url': requested, 'final_url': final, 'method': 'GET',
+            'http_status': 200, 'state': 'complete',
+        }]}
+
+        row = compare.reference_target_lifecycle({requested}, set(), candidates, completion)[0]
+
+        self.assertEqual(row['state'], 'dispatched_redirected_http_success')
+        self.assertFalse(row['exact_http_success'])
+        self.assertTrue(row['effective_http_success'])
+        self.assertTrue(row['redirected_http_success'])
 
     def test_reference_lifecycle_marks_truncated_and_protocol_context(self):
         url = 'https://example.test/flight?_rsc=abc'
@@ -297,6 +338,22 @@ class AcceptanceAndControlTests(unittest.TestCase):
         self.assertTrue(dimensions['execution_coverage_passed'])
         self.assertFalse(dimensions['crawl_completion_passed'])
         self.assertFalse(dimensions['strict_passed'])
+
+    def test_strict_acceptance_uses_effective_coverage_and_keeps_exact_metric(self):
+        runs = {
+            'basecrawler': {'status': 'completed', 'crawl_completion': {'status': 'complete', 'complete': True}},
+            'katana-static': {'status': 'completed'},
+            'katana-browser': {'status': 'completed'},
+        }
+        execution = {
+            'successful_reference_coverage': 51 / 59,
+            'effective_successful_reference_coverage': 1.0,
+        }
+
+        failures = compare.strict_acceptance_failures(59, 1.0, [], runs, execution)
+
+        self.assertEqual(failures, [])
+        self.assertTrue(compare.acceptance_dimensions(True, execution, True, failures)['execution_coverage_passed'])
 
     def test_control_url_override_is_site_scoped_and_same_origin(self):
         target = SimpleNamespace(site_id='testasp', seed='https://example.test/start')

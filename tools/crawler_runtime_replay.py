@@ -217,8 +217,7 @@ def main():
         if not isinstance(media_environment, dict):
             parser.error("Media environment must be a JSON object")
     media_json = json.dumps(media_environment, sort_keys=True) if media_environment is not None else ""
-    media_hash = digest(media_json.encode()) if media_json else None
-    report_directory = args.dataset / "media-runs" / media_hash[:12] if media_hash else args.dataset
+    report_directory = args.dataset
     report_directory.mkdir(parents=True, exist_ok=True)
     (args.dataset / "sources").mkdir(exist_ok=True)
     frontend = args.html.read_bytes()
@@ -293,10 +292,7 @@ def main():
     summary = {"status": rounds[-1]["status"], "coverage_accepted": False, "rounds": len(rounds), "modules": len([r for r in state["modules"].values() if r.get("file")]), "network_requests": network, "downloads_enabled": args.download, "unavailable": classify_unavailable(state), "runtime_source_sha256": runtime_hash, "runtime_executable_sha256": executable_hash, "source_changed_during_replay": runtime_hash != runtime_fingerprint(), "stop_reason": stop_reason, "environment_gaps": rounds[-1].get("environment_gaps", []), "dependency_limits": {"modules": 512, "bytes": args.max_total_bytes}, "wall_seconds": round(time.monotonic() - started, 6), "execution_seconds": sum(r["elapsed_seconds"] for r in rounds), "last_error": rounds[-1]["error"], "captured_requests": rounds[-1].get("requests") or [], "policy": "VM does not send requests. Initialization or capture is not full crawler acceptance."}
     summary.update(with_dom=args.with_dom, runtime_state=rounds[-1].get("runtime_state", {}), runtime_diagnostics=rounds[-1].get("runtime_diagnostics", []), pending_tasks=rounds[-1].get("pending_tasks", []))
     summary.update(execution_stop_reason=rounds[-1].get("execution_stop_reason"), captured_http_calls=rounds[-1].get("captured_http_calls", 0), captured_navigation_calls=rounds[-1].get("captured_navigation_calls", 0))
-    summary.update(media_environment=rounds[-1].get("media_environment"), media_environment_sha256=media_hash, report_directory=str(report_directory))
     save(args.dataset / "summary.json", summary)
-    if report_directory != args.dataset:
-        save(report_directory / "summary.json", summary)
     with (args.dataset / "replay-history.jsonl").open("a", encoding="utf-8") as history:
         history.write(json.dumps(summary, ensure_ascii=False) + "\n")
     print(json.dumps({k: summary[k] for k in ("status", "rounds", "modules", "network_requests", "wall_seconds")}, ensure_ascii=False))

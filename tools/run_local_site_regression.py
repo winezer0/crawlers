@@ -430,15 +430,15 @@ def crawl_site(
         path for path, values in statuses.items() if any(200 <= status < 400 for status in values)
     }
     missing = sorted(expected - succeeded)
+    runtime_only = {str(path).rstrip("/") or "/" for path in config.get("runtime_only_paths", ())}
+    succeeded_runtime_only = sorted(runtime_only & succeeded)
+    missing_runtime_only = sorted(runtime_only - succeeded)
     forbidden = sorted(
         {
             path_of(str(row["url"]))
             for row in scheduled_rows
             if isinstance(row.get("url"), str)
-            and (
-                any(fragment.lower() in path_of(str(row["url"])).lower() for fragment in FALSE_CANDIDATE_FRAGMENTS)
-                or path_of(str(row["url"])) in set(config.get("runtime_only_paths", ()))
-            )
+            and any(fragment.lower() in path_of(str(row["url"])).lower() for fragment in FALSE_CANDIDATE_FRAGMENTS)
         }
     )
     decoy_values: list[str] = []
@@ -479,7 +479,7 @@ def crawl_site(
         path for path in succeeded
         if any(path.startswith(prefix) for prefix in asset_prefixes)
     }
-    unexpected = sorted(succeeded - expected - asset_paths)
+    unexpected = sorted(succeeded - expected - runtime_only - asset_paths)
     analysis_failures = 0
     request_failures = 0
     completion = None
@@ -510,6 +510,9 @@ def crawl_site(
         "expected_paths": sorted(expected),
         "succeeded_paths": sorted(succeeded),
         "missing_expected_paths": missing,
+        "runtime_only_paths": sorted(runtime_only),
+        "succeeded_runtime_only_paths": succeeded_runtime_only,
+        "missing_runtime_only_paths": missing_runtime_only,
         "expected_interfaces": [f"{method} {path}" for path, method in sorted(expected_interfaces.items())],
         "discovered_interfaces": [
             f"{method} {path}" for path, method in sorted(discovered_interfaces)
@@ -531,6 +534,7 @@ def crawl_site(
     }
     result["passed"] = (
         not missing
+        and not missing_runtime_only
         and not missing_interfaces
         and not unexpected
         and not forbidden
@@ -565,11 +569,12 @@ def markdown_summary(
             "",
             "## Crawl results",
             "",
-            "| Site | Status | Runtime (s) | HTTP responses | Requests attempted | Source maps | Decoy paths: total/clue/requested/ignored | Analysis/request failures | Missing expected routes | Missing interface contracts | Unexpected paths | False candidates requested |",
-            "|---|---|---:|---:|---:|---:|---:|---:|---|---|---|---|",
+            "| Site | Status | Runtime (s) | HTTP responses | Requests attempted | Source maps | Decoy paths: total/clue/requested/ignored | Analysis/request failures | Missing expected routes | Missing interaction routes | Missing interface contracts | Unexpected paths | False candidates requested |",
+            "|---|---|---:|---:|---:|---:|---:|---:|---|---|---|---|---|",
         ]
     )
     for result in site_results:
+        missing_runtime = ", ".join(result["missing_runtime_only_paths"]) or "—"
         missing = ", ".join(result["missing_expected_paths"]) or "—"
         missing_interfaces = ", ".join(result["missing_interfaces"]) or "—"
         unexpected = ", ".join(result["unexpected_application_paths"]) or "—"
@@ -583,12 +588,12 @@ def markdown_summary(
             f"{result['elapsed_seconds']:.2f} | {result['response_rows']} | "
             f"{result.get('requests_attempted', 'n/a')} | {result['source_map_responses']} | "
             f"{decoys} | "
-            f"{result['analysis_failures']}/{result['request_failures']} | {missing} | {missing_interfaces} | {unexpected} | {forbidden} |"
+            f"{result['analysis_failures']}/{result['request_failures']} | {missing} | {missing_runtime} | {missing_interfaces} | {unexpected} | {forbidden} |"
         )
     lines.extend(
         [
             "",
-        "Expected routes are counted as covered when the crawler receives a 2xx or 3xx response; form interfaces are covered when the expected method and path are preserved as discoveries. "
+        "Expected routes and runtime-only interaction routes are covered only when the crawler receives a 2xx or 3xx response; form interfaces are covered when the expected method and path are preserved as discoveries. "
             "The false-candidate check examines HTTP response and request-error records; clue records may remain in discoveries without being scheduled.",
             "",
         ]

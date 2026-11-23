@@ -8,6 +8,34 @@ import crawler_runtime_replay as replay
 
 
 class RuntimeReplayTests(unittest.TestCase):
+    def test_frozen_audit_never_closes_rsc_variants_or_navigation(self):
+        audit = replay.audit_frozen_missing({"missing": ["https://example.test/a?_rsc=old", "https://example.test/b"]}, [
+            {"Raw": "https://example.test/a?_rsc=new", "Method": "GET", "Evidence": "executed-request-call", "Headers": {"rsc": "1"}},
+            {"Raw": "https://example.test/b", "Method": "GET", "Kind": "navigation", "Evidence": "executed-navigation-call"}])
+        self.assertEqual(audit["targets"], 2)
+        self.assertEqual(audit["related_variant_targets"], 1)
+        self.assertEqual(audit["exact_url_calls"], 0)
+        self.assertEqual(audit["closed_targets"], 0)
+        self.assertEqual(audit["rows"][1]["state"], "not_observed")
+
+    def test_stylesheets_require_actual_links_and_same_origin(self):
+        parsed = replay.Frontend("https://example.test/docs/")
+        parsed.feed('''<base href="/assets/"><link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="off.css" disabled><link rel="preload" href="preload.css"><link rel="stylesheet" href="https://other.test/x.css"><code>guessed.css</code>''')
+        self.assertEqual(parsed.stylesheets, ["https://example.test/assets/theme.css"])
+
+    def test_cached_stylesheets_are_separate_and_offline(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            css = b".chosen{animation-name:observed}"
+            (root / "theme.css").write_bytes(css)
+            args = argparse.Namespace(dataset=root, document_url="https://example.test/", download=False)
+            url = "https://example.test/theme.css"
+            state = {"modules": {}, "stylesheets": {url: {"file": "theme.css", "sha256": replay.digest(css), "evidence": []}}}
+            with patch.object(replay, "build_opener") as opener:
+                self.assertEqual(replay.collect(args, state, {url: []}, "css"), 0)
+                opener.return_value.open.assert_not_called()
+            self.assertEqual(state["modules"], {})
+
     def test_sources_require_evidence_and_proven_deployment_prefix(self):
         html = '''<script src="/deploy/static/a.js"></script>
         <code>/wrong/example.js</code>

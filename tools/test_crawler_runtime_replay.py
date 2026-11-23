@@ -18,6 +18,16 @@ class RuntimeReplayTests(unittest.TestCase):
         self.assertEqual(audit["closed_targets"], 0)
         self.assertEqual(audit["rows"][1]["state"], "not_observed")
 
+    def test_anchor_discovery_is_separate_from_rsc_request_evidence(self):
+        parsed = replay.Frontend("https://example.test/docs/")
+        parsed.feed('<base href="/app/"><a href="start#heading">Start</a><a href="https://other.test/start">Outside</a>')
+        audit = replay.audit_frozen_missing({"missing": ["https://example.test/app/start?_rsc=old"]}, [], parsed.links, "layout pending")
+        row = audit["rows"][0]
+        self.assertTrue(row["link_target_observed"])
+        self.assertFalse(row["request_variant_observed"])
+        self.assertEqual(row["runtime_blocker"], "layout pending")
+        self.assertEqual(audit["closed_targets"], 0)
+
     def test_stylesheets_require_actual_links_and_same_origin(self):
         parsed = replay.Frontend("https://example.test/docs/")
         parsed.feed('''<base href="/assets/"><link rel="stylesheet" href="theme.css"><link rel="stylesheet" href="off.css" disabled><link rel="preload" href="preload.css"><link rel="stylesheet" href="https://other.test/x.css"><code>guessed.css</code>''')

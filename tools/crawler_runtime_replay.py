@@ -52,10 +52,16 @@ class Frontend(HTMLParser):
         self.document = self.base = document
         self.base_seen = False
         self.sources, self.inline, self.stylesheets = [], [], []
+        self.links = []
         self.active = None
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
+        if tag in ("a", "area") and attrs.get("href"):
+            try:
+                self.links.append(scoped_url(attrs["href"], self.base, self.document))
+            except ValueError:
+                pass
         if tag == "base" and not self.base_seen and attrs.get("href"):
             self.base = urljoin(self.document, attrs["href"])
             self.base_seen = True
@@ -202,7 +208,7 @@ def runtime_fingerprint():
     return sources.hexdigest()
 
 
-def audit_frozen_missing(reference, captured):
+def audit_frozen_missing(reference, captured, links=(), runtime_error=""):
     """URL-level call evidence only; related RSC variants never close a target."""
     def resource(url):
         parts = urlsplit(url)
@@ -213,11 +219,17 @@ def audit_frozen_missing(reference, captured):
     for url in reference["missing"]:
         exact = [r for r in calls if r.get("Method", "GET") == "GET" and r["Raw"] == url]
         related = [r for r in calls if r.get("Method", "GET") == "GET" and resource(r["Raw"]) == resource(url) and r["Raw"] != url]
+        link_targets = sorted({link for link in links if resource(link) == resource(url)})
         rows.append({"method": "GET", "reference_url": url, "exact_url_call": bool(exact),
+                     "link_target_observed": bool(link_targets), "link_targets": link_targets,
+                     "request_variant_observed": bool(exact),
+                     "remaining_reason": "HTTP response not verified" if exact else "Related request uses a different context; equivalence unproven" if related else "Link exists; request callback not reached" if link_targets else "Neither link nor request observed in this saved document",
+                     "runtime_blocker": runtime_error[:2048],
                      "related_variants": [{"url": r["Raw"], "headers": r.get("Headers", {})} for r in related],
                      "state": "exact_url_call_not_sent" if exact else "different_variant_not_closed" if related else "not_observed",
                      "queued": False, "sent": False, "response_confirmed": False, "coverage_accepted": False})
     return {"targets": len(rows), "exact_url_calls": sum(r["exact_url_call"] for r in rows),
+            "link_target_observed": sum(r["link_target_observed"] for r in rows),
             "related_variant_targets": sum(bool(r["related_variants"]) for r in rows), "closed_targets": 0,
             "network_requests": 0, "rows": rows,
             "policy": "Offline call evidence only. Navigation is excluded. Different RSC hashes or contexts do not prove equivalent responses."}
@@ -233,6 +245,7 @@ def main():
     parser.add_argument("--with-dom", action="store_true", help="Install the actual saved HTML tree; does not render or trigger links")
     parser.add_argument("--media-environment", type=Path, help="JSON declaring virtual media inputs, not measured browser/screen data")
     parser.add_argument("--frozen-effective", type=Path, help="Saved effective.json with missing GET targets; audit only, never rewrite the reference")
+    parser.add_argument("--reference-entry", help="Frozen benchmark entry URL; labels different-page diagnostics explicitly")
     parser.add_argument("--max-downloads", type=int, default=96)
 
     def positive_seconds(value):
@@ -349,9 +362,13 @@ def main():
     save(args.dataset / "summary.json", summary)
     if args.frozen_effective:
         reference_body = args.frozen_effective.read_bytes()
-        audit = audit_frozen_missing(json.loads(reference_body), summary["captured_requests"])
+        frontend = Frontend(args.document_url)
+        frontend.feed(args.html.read_text(encoding="utf-8"))
+        audit = audit_frozen_missing(json.loads(reference_body), summary["captured_requests"], frontend.links, summary["last_error"])
         audit.update(reference=str(args.frozen_effective.resolve()), reference_sha256=digest(reference_body),
-                     runtime_source_sha256=runtime_hash)
+                     runtime_source_sha256=runtime_hash, document_url=args.document_url,
+                     reference_entry=args.reference_entry,
+                     comparison_scope="matching_entry_document_replay" if args.reference_entry == args.document_url else "different_document_diagnostic" if args.reference_entry else "unverified_entry_document_diagnostic")
         save(args.dataset / "frozen-missing-audit.json", audit)
     with (args.dataset / "replay-history.jsonl").open("a", encoding="utf-8") as history:
         history.write(json.dumps(summary, ensure_ascii=False) + "\n")

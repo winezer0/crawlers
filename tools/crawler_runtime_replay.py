@@ -199,6 +199,7 @@ def main():
     parser.add_argument("--dataset", type=Path, required=True)
     parser.add_argument("--seed-manifest", type=Path)
     parser.add_argument("--download", action="store_true")
+    parser.add_argument("--with-dom", action="store_true", help="Install the actual saved HTML tree; does not render or trigger links")
     parser.add_argument("--max-downloads", type=int, default=96)
     parser.add_argument("--max-rounds", type=int, default=32)
     parser.add_argument("--max-file-bytes", type=int, default=4 << 20)
@@ -253,6 +254,7 @@ def main():
             report_file = args.dataset / f"round-{index + 1:03d}.json"
             report_file.unlink(missing_ok=True)
             env = dict(os.environ)
+            env["ROUTE_EXEC_DOCUMENT_HTML"] = str(args.dataset / "frontend.html") if args.with_dom else ""
             env.update(ROUTE_EXEC_FIXTURE=str(args.dataset / "bootstrap.js"), ROUTE_EXEC_MODULE_MANIFEST=str(args.dataset / "modules.json"), ROUTE_EXEC_SOURCE_URL=args.document_url + "#basecrawler-turbopack-bootstrap", ROUTE_EXEC_DOCUMENT_URL=args.document_url, ROUTE_EXEC_REPORT=str(report_file), ROUTE_EXEC_MAX_DEPENDENCIES="512", ROUTE_EXEC_MAX_DEPENDENCY_BYTES=str(args.max_total_bytes))
             run = subprocess.run([str(executable), "-test.run", "^TestDownloadedRuntimeFixture$", "-test.v"], env=env, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30)
             report_file.with_suffix(".log").write_text(run.stdout + run.stderr, encoding="utf-8")
@@ -260,6 +262,8 @@ def main():
                 raise RuntimeError("Runtime did not write diagnostic JSON: " + run.stdout + run.stderr)
             report = json.loads(report_file.read_text(encoding="utf-8"))
             report["test_exit_code"] = run.returncode
+            report.update(with_dom=args.with_dom, runtime_source_sha256=runtime_hash, runtime_executable_sha256=executable_hash)
+            save(report_file, report)
             rounds.append(report)
             print(json.dumps({"round": index + 1, "status": report["status"], "requests": len(report.get("requests") or []), "error": report["error"][:700]}), flush=True)
             pending = {}
@@ -276,6 +280,7 @@ def main():
                 break
             evidence = pending
     summary = {"status": rounds[-1]["status"], "coverage_accepted": False, "rounds": len(rounds), "modules": len([r for r in state["modules"].values() if r.get("file")]), "network_requests": network, "downloads_enabled": args.download, "unavailable": classify_unavailable(state), "runtime_source_sha256": runtime_hash, "runtime_executable_sha256": executable_hash, "source_changed_during_replay": runtime_hash != runtime_fingerprint(), "stop_reason": stop_reason, "environment_gaps": rounds[-1].get("environment_gaps", []), "dependency_limits": {"modules": 512, "bytes": args.max_total_bytes}, "wall_seconds": round(time.monotonic() - started, 6), "execution_seconds": sum(r["elapsed_seconds"] for r in rounds), "last_error": rounds[-1]["error"], "captured_requests": rounds[-1].get("requests") or [], "policy": "VM does not send requests. Initialization or capture is not full crawler acceptance."}
+    summary.update(with_dom=args.with_dom, runtime_state=rounds[-1].get("runtime_state", {}), runtime_diagnostics=rounds[-1].get("runtime_diagnostics", []), pending_tasks=rounds[-1].get("pending_tasks", []))
     save(args.dataset / "summary.json", summary)
     with (args.dataset / "replay-history.jsonl").open("a", encoding="utf-8") as history:
         history.write(json.dumps(summary, ensure_ascii=False) + "\n")

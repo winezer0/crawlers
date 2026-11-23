@@ -265,7 +265,7 @@ def main():
             report.update(with_dom=args.with_dom, runtime_source_sha256=runtime_hash, runtime_executable_sha256=executable_hash)
             save(report_file, report)
             rounds.append(report)
-            print(json.dumps({"round": index + 1, "status": report["status"], "requests": len(report.get("requests") or []), "error": report["error"][:700]}), flush=True)
+            print(json.dumps({"round": index + 1, "status": report["status"], "observed_targets": len(report.get("requests") or []), "captured_http_calls": report.get("captured_http_calls", 0), "captured_navigation_calls": report.get("captured_navigation_calls", 0), "error": report["error"][:700]}), flush=True)
             pending = {}
             for dep in report["dependencies"]:
                 url = scoped_url(dep["url"], args.document_url, args.document_url)
@@ -281,6 +281,7 @@ def main():
             evidence = pending
     summary = {"status": rounds[-1]["status"], "coverage_accepted": False, "rounds": len(rounds), "modules": len([r for r in state["modules"].values() if r.get("file")]), "network_requests": network, "downloads_enabled": args.download, "unavailable": classify_unavailable(state), "runtime_source_sha256": runtime_hash, "runtime_executable_sha256": executable_hash, "source_changed_during_replay": runtime_hash != runtime_fingerprint(), "stop_reason": stop_reason, "environment_gaps": rounds[-1].get("environment_gaps", []), "dependency_limits": {"modules": 512, "bytes": args.max_total_bytes}, "wall_seconds": round(time.monotonic() - started, 6), "execution_seconds": sum(r["elapsed_seconds"] for r in rounds), "last_error": rounds[-1]["error"], "captured_requests": rounds[-1].get("requests") or [], "policy": "VM does not send requests. Initialization or capture is not full crawler acceptance."}
     summary.update(with_dom=args.with_dom, runtime_state=rounds[-1].get("runtime_state", {}), runtime_diagnostics=rounds[-1].get("runtime_diagnostics", []), pending_tasks=rounds[-1].get("pending_tasks", []))
+    summary.update(execution_stop_reason=rounds[-1].get("execution_stop_reason"), captured_http_calls=rounds[-1].get("captured_http_calls", 0), captured_navigation_calls=rounds[-1].get("captured_navigation_calls", 0))
     save(args.dataset / "summary.json", summary)
     with (args.dataset / "replay-history.jsonl").open("a", encoding="utf-8") as history:
         history.write(json.dumps(summary, ensure_ascii=False) + "\n")

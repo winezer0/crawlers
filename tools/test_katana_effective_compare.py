@@ -458,6 +458,30 @@ class CandidateEvidenceTests(unittest.TestCase):
         }]
         self.assertEqual(compare.base_only_source_samples(rows, set()), {})
 
+    def test_result_clue_overrides_confidence_free_discovery_for_same_source(self):
+        route_template = {
+            "url": "https://example.test/:slug(.*)*", "method": "GET", "source": "route:route-table",
+            "confidence": "clue", "source_records": [
+                {"record_file": "discoveries.jsonl", "source": "route:route-table", "confidence": ""},
+                {"record_file": "results.jsonl", "source": "route:route-table", "confidence": "clue"},
+            ],
+        }
+        self.assertFalse(compare.candidate_is_crawlable(route_template))
+        self.assertEqual(compare.base_only_source_samples([route_template], set()), {})
+
+    def test_crawlable_alternate_source_keeps_candidate_but_not_template_source(self):
+        url = "https://example.test/:slug(.*)*"
+        row = {
+            "url": url, "method": "GET", "source": "route:route-table", "confidence": "clue",
+            "source_records": [
+                {"record_file": "discoveries.jsonl", "source": "route:route-table", "confidence": ""},
+                {"record_file": "results.jsonl", "source": "route:route-table", "confidence": "clue"},
+                {"record_file": "discoveries.jsonl", "source": "a", "confidence": ""},
+            ],
+        }
+        self.assertTrue(compare.candidate_is_crawlable(row))
+        self.assertEqual(compare.base_only_source_samples([row], set()), {"a": [url]})
+
 
 if __name__ == "__main__":
     unittest.main()

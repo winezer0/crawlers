@@ -538,15 +538,39 @@ def classify(row, control):
     return 'other_content'
 
 
-def candidate_is_crawlable(row):
-    records = row.get('source_records') or []
-    confidences = [str(record.get('confidence') or '').lower() for record in records]
-    if not confidences:
-        confidences = [str(row.get('confidence') or '').lower()]
-    # Empty confidence is the normal label for links and historical output
-    # created before confidence metadata existed. Explicit clues/templates are
-    # never treated as visited coverage.
+def candidate_source_is_crawlable(records):
+    """Classify one source using its final result records when available.
+
+    Discovery rows often have no confidence field because the crawler records
+    the queue decision later in results.jsonl. Treating that empty discovery
+    value as positive can turn a route template explicitly deferred as a clue
+    into a crawlable page.
+    """
+    result_records = [record for record in records
+                      if record.get('record_file') == 'results.jsonl']
+    authoritative = result_records or records
+    confidences = [str(record.get('confidence') or '').lower()
+                   for record in authoritative]
+    # Empty confidence remains crawlable for links and older artifacts that
+    # predate confidence metadata. An explicit result clue/template takes
+    # precedence over its confidence-free discovery record.
     return any(confidence not in ('clue', 'template') for confidence in confidences)
+
+
+def candidate_source_records(row):
+    records = row.get('source_records') or [{
+        'source': row.get('source') or 'unknown',
+        'confidence': row.get('confidence', ''),
+    }]
+    grouped = {}
+    for record in records:
+        grouped.setdefault(record.get('source') or 'unknown', []).append(record)
+    return grouped
+
+
+def candidate_is_crawlable(row):
+    return any(candidate_source_is_crawlable(records)
+               for records in candidate_source_records(row).values())
 
 
 def reference_target_lifecycle(valid_get_urls, non_get_targets, candidates, completion, comparisons=()):
@@ -715,12 +739,9 @@ def base_only_source_samples(base_rows, reference):
     for row in base_rows:
         if row['url'] in reference or not eligible(row, 'basecrawler'):
             continue
-        positive_records = [record for record in row.get('source_records', [])
-                            if str(record.get('confidence') or '').lower() not in ('clue', 'template')]
-        sources = {record.get('source') or 'unknown' for record in positive_records}
-        if not sources:
-            sources = {row.get('source') or 'unknown'}
-        for source in sources:
+        for source, records in candidate_source_records(row).items():
+            if not candidate_source_is_crawlable(records):
+                continue
             grouped.setdefault(source, set()).add(row['url'])
     samples = {}
     for source, urls in grouped.items():
@@ -930,14 +951,11 @@ def verify_site(target, args):
     source_candidate_counts = {}
     for row in data['basecrawler']:
         pair = (row['method'], row['url'])
-        records = row.get('source_records') or [{'source': row.get('source') or 'unknown',
-                                                  'confidence': row.get('confidence', '')}]
-        for record in records:
-            source = record.get('source') or 'unknown'
+        for source, records in candidate_source_records(row).items():
             source_stats = source_candidate_counts.setdefault(source, {'candidate_method_urls': set(),
                                                                         'crawlable_method_urls': set()})
             source_stats['candidate_method_urls'].add(pair)
-            if str(record.get('confidence') or '').lower() not in ('clue', 'template'):
+            if candidate_source_is_crawlable(records):
                 source_stats['crawlable_method_urls'].add(pair)
     candidate_audit = {
         'candidate_method_urls': len(base_pairs),

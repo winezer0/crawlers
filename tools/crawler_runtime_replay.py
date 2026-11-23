@@ -234,6 +234,14 @@ def main():
     parser.add_argument("--media-environment", type=Path, help="JSON declaring virtual media inputs, not measured browser/screen data")
     parser.add_argument("--frozen-effective", type=Path, help="Saved effective.json with missing GET targets; audit only, never rewrite the reference")
     parser.add_argument("--max-downloads", type=int, default=96)
+
+    def positive_seconds(value):
+        seconds = int(value)
+        if seconds <= 0:
+            raise argparse.ArgumentTypeError("execution timeout must be positive")
+        return seconds
+
+    parser.add_argument("--exec-timeout", type=positive_seconds, default=30, help="Offline diagnostic VM timeout in seconds; production defaults unchanged")
     parser.add_argument("--max-rounds", type=int, default=32)
     parser.add_argument("--max-file-bytes", type=int, default=4 << 20)
     parser.add_argument("--max-total-bytes", type=int, default=32 << 20)
@@ -304,8 +312,9 @@ def main():
             env["ROUTE_EXEC_DOCUMENT_HTML"] = str(args.dataset / "frontend.html") if args.with_dom else ""
             env["ROUTE_EXEC_MEDIA_ENVIRONMENT"] = media_json
             env["ROUTE_EXEC_STYLESHEET_MANIFEST"] = str(args.dataset / "stylesheets.json")
+            env["ROUTE_EXEC_TIMEOUT"] = f"{args.exec_timeout}s"
             env.update(ROUTE_EXEC_FIXTURE=str(args.dataset / "bootstrap.js"), ROUTE_EXEC_MODULE_MANIFEST=str(args.dataset / "modules.json"), ROUTE_EXEC_SOURCE_URL=args.document_url + "#basecrawler-turbopack-bootstrap", ROUTE_EXEC_DOCUMENT_URL=args.document_url, ROUTE_EXEC_REPORT=str(report_file), ROUTE_EXEC_MAX_DEPENDENCIES="512", ROUTE_EXEC_MAX_DEPENDENCY_BYTES=str(args.max_total_bytes))
-            run = subprocess.run([str(executable), "-test.run", "^TestDownloadedRuntimeFixture$", "-test.v"], env=env, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30)
+            run = subprocess.run([str(executable), "-test.run", "^TestDownloadedRuntimeFixture$", "-test.v"], env=env, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=args.exec_timeout + 15)
             report_file.with_suffix(".log").write_text(run.stdout + run.stderr, encoding="utf-8")
             if not report_file.exists():
                 raise RuntimeError("Runtime did not write diagnostic JSON: " + run.stdout + run.stderr)

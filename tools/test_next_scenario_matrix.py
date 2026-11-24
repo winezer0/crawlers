@@ -1,7 +1,19 @@
 import unittest
-from run_next_scenario_matrix import compare_extra_targets, evaluate, key
+from run_next_scenario_matrix import compare_extra_targets, evaluate, evaluate_shared_scripts, key
 
 class ScenarioScoringTests(unittest.TestCase):
+    def test_shared_script_download_must_exist_exactly_once(self):
+        script = {"url": "http://localhost/shared.js", "status": 200}
+        refs = [[script], [script]]
+        self.assertTrue(evaluate_shared_scripts([script], refs)["passed"])
+        self.assertFalse(evaluate_shared_scripts([], refs)["passed"])
+        self.assertFalse(evaluate_shared_scripts([script, script], refs)["passed"])
+
+    def test_shared_script_check_requires_common_successful_resource(self):
+        self.assertFalse(evaluate_shared_scripts([], [[], []])["passed"])
+        missing = {"url": "http://localhost/shared.js", "status": 404}
+        self.assertFalse(evaluate_shared_scripts([missing], [[missing], [missing]])["passed"])
+
     def test_query_and_method_must_match(self):
         case = {"targets": ["/api/matrix/result?token=a%2Bb"]}
         rows = [{"url": "http://localhost/api/matrix/result?token=a+b", "status": 200},

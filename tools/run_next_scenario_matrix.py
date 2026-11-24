@@ -39,6 +39,10 @@ CONTEXT_SCENARIOS = (
     {"id": "click", "seed": "/context-regression/click", "targets": ["/api/context-regression/click"],
      "required_runtime": True,
      "api_prefix": "/api/context-regression/"},
+    {"id": "shared-pages", "seed": "/context-regression/pages",
+     "targets": ["/api/context-regression/default", "/api/context-regression/alpha", "/api/context-regression/beta"],
+     "api_prefix": "/api/context-regression/", "required_runtime": True,
+     "shared_script_cases": ["default-spread", "shared-instances"]},
 )
 NEGATIVE = "/api/matrix/decoy-not-a-request"
 FIXTURE_BRANCH_CONDITIONS = {
@@ -53,6 +57,20 @@ def key(url: str, method: str = "GET") -> str:
     parsed = urlsplit(url)
     query = urlencode(sorted(parse_qsl(parsed.query, keep_blank_values=True)))
     return method.upper() + " " + (parsed.path or "/") + ("?" + query if query else "")
+
+
+def evaluate_shared_scripts(outputs: list[dict], references: list[list[dict]]) -> dict:
+    def script_rows(rows):
+        return [row for row in rows if row.get("url") and
+                urlsplit(row["url"]).path.endswith((".js", ".mjs")) and
+                int(row.get("status") or 0) > 0]
+    sets = [{key(row["url"], row.get("method") or "GET") for row in script_rows(rows)
+             if 200 <= int(row["status"]) < 400} for rows in references]
+    shared = set.intersection(*sets) if sets else set()
+    actual = Counter(key(row["url"], row.get("method") or "GET") for row in script_rows(outputs))
+    return {"shared_scripts": sorted(shared),
+            "download_counts": {target: actual[target] for target in sorted(shared)},
+            "passed": bool(shared) and all(actual[target] == 1 for target in shared)}
 
 
 def evaluate(case: dict, outputs: list[dict], discoveries: list[dict]) -> dict:
@@ -188,6 +206,12 @@ def main() -> int:
                 rows = read_json_lines(out / name / "tool-output.jsonl")
                 discoveries = read_json_lines(out / name / "discoveries.jsonl")
                 scored = evaluate(case, rows, discoveries)
+                if case.get("shared_script_cases"):
+                    check = evaluate_shared_scripts(rows, [
+                        read_json_lines(out / reference / "tool-output.jsonl")
+                        for reference in case["shared_script_cases"]])
+                    scored["shared_script_downloads"] = check
+                    scored["passed"] = scored["passed"] and check["passed"]
                 audit = audit_scan(out / name)
                 known_targets = {}
                 for scenario in scenarios:

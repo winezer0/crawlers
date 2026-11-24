@@ -1,5 +1,5 @@
 import unittest
-from run_next_scenario_matrix import evaluate, key
+from run_next_scenario_matrix import compare_extra_targets, evaluate, key
 
 class ScenarioScoringTests(unittest.TestCase):
     def test_query_and_method_must_match(self):
@@ -28,6 +28,38 @@ class ScenarioScoringTests(unittest.TestCase):
         result = evaluate({"targets": [url]}, [{"url": url, "status": 200}] * 2, [])
         self.assertEqual(result["successful_target_response_counts"][key(url)], 2)
         self.assertEqual(key(url), key("/api/matrix/result?b=2&a=1"))
+
+
+    def test_context_suite_counts_extra_api_in_its_own_namespace(self):
+        result = evaluate({"targets": ["/api/context-regression/alpha"],
+                           "api_prefix": "/api/context-regression/"},
+                          [{"url": "/api/context-regression/alpha", "status": 200},
+                           {"url": "/api/context-regression/beta", "status": 200}], [])
+        self.assertFalse(result["passed"])
+        self.assertEqual(result["unclassified_api_requests"], ["GET /api/context-regression/beta"])
+
+
+    def test_prior_comparison_preserves_pending_and_response_causes(self):
+        previous = {"results": [{"id": "case", "unclassified_api_requests": ["GET /api/branch", "GET /api/followup"],
+                                "extra_api_attribution": [
+                                    {"identity": "GET http://old/api/branch", "dispatch_bases": ["static_request_sink"]},
+                                    {"identity": "GET http://old/api/followup", "dispatch_bases": ["response_extraction"],
+                                     "parents": ["http://old/api/branch"]}]}]}
+        target = {"url": "http://new/api/branch", "method": "GET", "attempts": [],
+                  "discoveries": [{"conditional": True}],
+                  "deferred": [{"reason": "conditional_execution_unresolved"}]}
+        comparison = compare_extra_targets(previous, [{"id": "case"}], {"case": {"targets": [target]}})
+        self.assertEqual(comparison["prior_extra_count"], 2)
+        self.assertEqual(comparison["remaining_requests"], 0)
+        self.assertEqual([row["disposition"] for row in comparison["items"]],
+                         ["retained_until_execution", "unselected_parent_response_not_requested"])
+
+    def test_prior_comparison_does_not_hide_remaining_requests(self):
+        previous = {"results": [{"id": "case", "unclassified_api_requests": ["GET /api/branch"]}]}
+        target = {"url": "http://new/api/branch", "method": "GET", "attempts": [{"http_status": 200}]}
+        comparison = compare_extra_targets(previous, [{"id": "case"}], {"case": {"targets": [target]}})
+        self.assertEqual(comparison["remaining_requests"], 1)
+        self.assertEqual(comparison["items"][0]["disposition"], "still_requested")
 
 if __name__ == "__main__":
     unittest.main()

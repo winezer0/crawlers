@@ -65,5 +65,16 @@ class EvidenceAuditTests(unittest.TestCase):
         self.assertEqual(audit["non_success_http_responses"][0]["identity"], "GET /image")
         self.assertNotIn("false_positive", audit["non_success_http_responses"][0])
 
+
+    def test_conditional_candidate_is_not_a_runtime_invocation(self):
+        target = audit_records(
+            [{"url": "/api", "source": "js-ast:goja", "evidence": "request-call",
+              "conditional": True, "confidence": "clue"}], [], [],
+            [{"url": "/api", "reason": "conditional_execution_unresolved"}])["targets"][0]
+        self.assertTrue(target["discoveries"][0]["conditional"])
+        self.assertFalse(target["stages"]["runtime_request_call_observed"])
+        self.assertFalse(target["stages"]["attempt_recorded"])
+        self.assertEqual(target["deferred"][0]["reason"], "conditional_execution_unresolved")
+
 if __name__ == "__main__":
     unittest.main()

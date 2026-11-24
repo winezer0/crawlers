@@ -52,7 +52,7 @@ def audit_records(discoveries: list[dict], attempts: list[dict], outputs: list[d
             continue
         edge = {field: row[field] for field in (
             "source", "evidence", "referer", "depth", "kind", "confidence", "tag",
-            "attribute", "headers", "params", "json_body_params", "param_values") if field in row}
+            "attribute", "headers", "params", "json_body_params", "param_values", "conditional") if field in row}
         edge["stage"] = stage(str(row.get("source") or ""), str(row.get("evidence") or ""))
         edge["trigger_condition"] = {
             "runtime_request_call": "Invocation reached in bounded JS replay; exact branch expression is not captured",
@@ -63,6 +63,8 @@ def audit_records(discoveries: list[dict], attempts: list[dict], outputs: list[d
             "response_extraction": "URL extracted from a received response; does not establish JS continuation",
             "document_extraction": "URL extracted from a document element",
         }.get(edge["stage"], "Unknown; inspect the retained source and evidence")
+        if edge.get("conditional"):
+            edge["trigger_condition"] = "Request sink requires unresolved branch or event input; retained until an invocation supplies context"
         edge["response_proof"] = False
         edge_key = identity(row["url"], row.get("method")) + json.dumps(edge, sort_keys=True)
         if edge_key in seen:

@@ -29,6 +29,17 @@ SCENARIOS = (
      "targets": ["/api/matrix/bootstrap", "/api/matrix/response-followup?token=local%2Bproof"], "holdout": True},
     {"id": "svg-identity", "seed": "/matrix/svg", "targets": ["/api/matrix/svg"], "holdout": True},
 )
+CONTEXT_SCENARIOS = (
+    {"id": "default-spread", "seed": "/context-regression/defaults",
+     "targets": ["/api/context-regression/default"], "api_prefix": "/api/context-regression/",
+     "required_runtime": True},
+    {"id": "shared-instances", "seed": "/context-regression/instances",
+     "targets": ["/api/context-regression/alpha", "/api/context-regression/beta"],
+     "api_prefix": "/api/context-regression/", "required_runtime": True},
+    {"id": "click", "seed": "/context-regression/click", "targets": ["/api/context-regression/click"],
+     "required_runtime": True,
+     "api_prefix": "/api/context-regression/"},
+)
 NEGATIVE = "/api/matrix/decoy-not-a-request"
 FIXTURE_BRANCH_CONDITIONS = {
     "client-effect": "ClientProbe mode falls through lazy/response/svg checks to the CSR fetch",
@@ -67,7 +78,7 @@ def evaluate(case: dict, outputs: list[dict], discoveries: list[dict]) -> dict:
     negative_found = sorted(target for target in found if urlsplit(target.split(" ", 1)[1]).path == NEGATIVE)
     negative_sent = sorted(target for target in attempted if urlsplit(target.split(" ", 1)[1]).path == NEGATIVE)
     unclassified = sorted(target for target in attempted
-                          if urlsplit(target.split(" ", 1)[1]).path.startswith("/api/matrix/")
+                          if urlsplit(target.split(" ", 1)[1]).path.startswith(case.get("api_prefix", "/api/matrix/"))
                           and target not in expected and target not in negative_sent)
     return {
         "expected": sorted(expected), "found": sorted(expected & found),
@@ -81,17 +92,64 @@ def evaluate(case: dict, outputs: list[dict], discoveries: list[dict]) -> dict:
     }
 
 
+
+def compare_extra_targets(previous: dict, results: list[dict], audits: dict[str, dict]) -> dict:
+    """Compare each prior extra with current evidence; never rescan a reference."""
+    rows = []
+    current = {row["id"]: row for row in results}
+    for case in previous["results"]:
+        name = case["id"]
+        if name not in current:
+            continue
+        audit = audits[name]
+        targets = {key(target["url"], target["method"]): target for target in audit["targets"]}
+        before = {key(row["identity"].split(" ", 1)[1], row["identity"].split(" ", 1)[0]): row
+                  for row in case.get("extra_api_attribution", [])}
+        for label in case.get("unclassified_api_requests", []):
+            prior = before.get(label, {})
+            target = targets.get(label, {})
+            attempts = target.get("attempts", [])
+            deferred = target.get("deferred", [])
+            conditional = any(edge.get("conditional") for edge in target.get("discoveries", []))
+            parents_not_requested = (
+                bool(prior.get("parents")) and
+                all(not targets.get(key(parent), {}).get("attempts") for parent in prior["parents"]))
+            if attempts:
+                disposition = "still_requested"
+            elif conditional and any(row.get("reason") == "conditional_execution_unresolved" for row in deferred):
+                disposition = "retained_until_execution"
+            elif "response_extraction" in prior.get("dispatch_bases", []) and parents_not_requested:
+                disposition = "unselected_parent_response_not_requested"
+            else:
+                disposition = "not_requested_without_sufficient_disposition_evidence"
+            rows.append({"scenario": name, "target": label,
+                         "before_dispatch_bases": prior.get("dispatch_bases", []),
+                         "before_parents": prior.get("parents", []),
+                         "after_attempt_count": len(attempts),
+                         "after_conditional_evidence": conditional,
+                         "after_deferred_reasons": sorted({row.get("reason", "") for row in deferred}),
+                         "disposition": disposition})
+    return {"prior_extra_count": len(rows),
+            "remaining_requests": sum(row["after_attempt_count"] > 0 for row in rows),
+            "items": rows,
+            "limitation": "No claim that a deferred branch URL is globally invalid or unreachable"}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out-dir", type=Path)
+    parser.add_argument("--compare-summary", type=Path, help="audit each extra from a previous immutable matrix summary")
+    parser.add_argument("--suite", choices=("matrix", "context"), default="matrix")
     parser.add_argument("--skip-build", action="store_true", help="reuse an already built Next fixture")
     args = parser.parse_args()
+    previous = json.loads(args.compare_summary.read_text(encoding="utf-8")) if args.compare_summary else None
+    scenarios = CONTEXT_SCENARIOS if args.suite == "context" else SCENARIOS
     out = (args.out_dir or ROOT / "artifacts/crawler-comparison" /
            datetime.now().strftime("next-scenario-matrix-%Y%m%d-%H%M%S")).resolve()
     out.mkdir(parents=True, exist_ok=True)
     if (out / "contract.json").exists():
         raise RuntimeError("Use a new output directory; previous scenario records are immutable")
-    contract = {"scenarios": SCENARIOS, "negative": NEGATIVE, "reference": "No Katana rescan; new fixture scenarios have no frozen Katana measurement"}
+    contract = {"scenarios": scenarios, "negative": NEGATIVE, "reference": "No Katana rescan; new fixture scenarios have no frozen Katana measurement"}
     contract_bytes = json.dumps(contract, sort_keys=True, indent=2).encode()
     (out / "contract.json").write_bytes(contract_bytes)
     fixture = Path(SITE_CONFIG["local-next"]["directory"])
@@ -122,7 +180,7 @@ def main() -> int:
             service, port, log = launch_service("next-scenarios", config, node, out)
             origin = f"http://127.0.0.1:{port}"
             wait_for_service(service, origin, log)
-            for case in SCENARIOS:
+            for case in scenarios:
                 name = case["id"]
                 current = dict(config, seed_path=case["seed"], expected_paths=(case["seed"],),
                                expected_interfaces={}, runtime_only_paths=())
@@ -132,13 +190,13 @@ def main() -> int:
                 scored = evaluate(case, rows, discoveries)
                 audit = audit_scan(out / name)
                 known_targets = {}
-                for scenario in SCENARIOS:
+                for scenario in scenarios:
                     for target in scenario["targets"]:
                         known_targets.setdefault("GET " + origin + target, []).append(scenario["id"])
                 extra = []
                 expected_labels = {"GET " + origin + target for target in case["targets"]}
                 for target in audit["targets"]:
-                    if not urlsplit(target["url"]).path.startswith("/api/matrix/"):
+                    if not urlsplit(target["url"]).path.startswith(case.get("api_prefix", "/api/matrix/")):
                         continue
                     label = target["identity"]
                     target["fixture_contract"] = {
@@ -168,6 +226,19 @@ def main() -> int:
                 scored["expected_runtime_calls"] = sorted(expected_labels & runtime_labels)
                 scored["expected_without_runtime_call_evidence"] = sorted(expected_labels - runtime_labels)
                 scored["extra_api_attribution"] = extra
+                if case.get("required_runtime"):
+                    scored["passed"] = scored["passed"] and not scored["expected_without_runtime_call_evidence"]
+                if case.get("pending_targets"):
+                    pending_labels = {"GET " + origin + target for target in case["pending_targets"]}
+                    pending = [target for target in audit["targets"] if target["identity"] in pending_labels]
+                    scored["retained_pending_targets"] = sorted(
+                        target["identity"] for target in pending if
+                        any(edge.get("conditional") and edge.get("confidence") == "clue"
+                            for edge in target["discoveries"]) and
+                        any(row.get("reason") == "conditional_execution_unresolved"
+                            for row in target["deferred"]) and not target["attempts"])
+                    scored["passed"] = scored["passed"] and set(scored["retained_pending_targets"]) == pending_labels
+
                 scored.update({"id": name, "holdout": case.get("holdout", False),
                                "elapsed_seconds": scan["elapsed_seconds"],
                                "response_rows": scan["response_rows"], "discovery_rows": scan["discovery_rows"],
@@ -189,6 +260,13 @@ def main() -> int:
                "scope": "URL discovery and successful sending; does not prove browser runtime execution",
                "reference": contract["reference"], "results": results,
                "passed": all(result["passed"] for result in results)}
+    if previous is not None:
+        audits = {row["id"]: json.loads((out / row["evidence_audit"]).read_text(encoding="utf-8"))
+                  for row in results}
+        comparison = compare_extra_targets(previous, results, audits)
+        (out / "prior-extra-comparison.json").write_text(json.dumps(comparison, indent=2), encoding="utf-8")
+        summary["prior_extra_comparison"] = "prior-extra-comparison.json"
+        summary["compared_summary"] = str(args.compare_summary.resolve())
     (out / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(out)
     return 0 if summary["passed"] else 1

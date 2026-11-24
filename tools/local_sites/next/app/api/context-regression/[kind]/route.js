@@ -4,6 +4,7 @@ const expected = {
   beta: "beta:instances",
   default: "default:fallback",
   click: "click:interaction",
+  state: "state:unlocked",
 };
 export async function GET(request, { params }) {
   const { kind } = await params;

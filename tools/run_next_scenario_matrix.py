@@ -43,6 +43,11 @@ CONTEXT_SCENARIOS = (
      "targets": ["/api/context-regression/default", "/api/context-regression/alpha", "/api/context-regression/beta"],
      "api_prefix": "/api/context-regression/", "required_runtime": True,
      "shared_script_cases": ["default-spread", "shared-instances"]},
+    {"id": "interaction-state", "seed": "/context-regression/state",
+     "targets": ["/api/context-regression/state"], "required_runtime": True,
+     "api_prefix": "/api/context-regression/",
+     "pending_targets": ["/api/context-regression/state-" + suffix
+                         for suffix in ("hidden", "inert", "display", "visibility", "pointer")]},
 )
 NEGATIVE = "/api/matrix/decoy-not-a-request"
 FIXTURE_BRANCH_CONDITIONS = {

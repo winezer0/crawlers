@@ -154,7 +154,9 @@ def read_json_lines(path: Path) -> list[dict[str, Any]]:
     if not path.is_file():
         return []
     rows: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+    # JSON strings may contain literal U+2028/U+2029 in recorded JS bodies.
+    # splitlines() treats those as record separators and silently loses evidence.
+    for line in path.read_text(encoding="utf-8", errors="replace").split("\n"):
         try:
             value = json.loads(line)
         except json.JSONDecodeError:

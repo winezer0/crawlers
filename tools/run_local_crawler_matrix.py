@@ -172,7 +172,6 @@ def run_katana_baseline(
         f"{fingerprint}|{katana_hash}|{mode}|{origin}".encode("utf-8")
     ).hexdigest()[:24]
     baseline_dir = KATANA_BASELINES / cache_key / name / mode
-    baseline_dir.mkdir(parents=True, exist_ok=True)
     output_path = baseline_dir / "output.jsonl"
     metadata_path = baseline_dir / "metadata.json"
     attempt_path = baseline_dir / "attempt.json"
@@ -196,45 +195,13 @@ def run_katana_baseline(
         }
         return metadata, read_json_lines(output_path)
 
-    attempt_path.write_text(
-        json.dumps({"started_at": datetime.now().astimezone().isoformat(), "frozen": True}, indent=2),
-        encoding="utf-8",
-    )
-    seed = origin + str(SITE_CONFIG[name]["seed_path"])
-    command = [
-        str(KATANA), "-u", seed,
-        "-d", "8", "-c", "8", "-rl", "100", "-timeout", "10", "-retry", "0",
-        "-fs", "fqdn", "-jc", "-jsl", "-fx", "-j", "-silent", "-duc", "-or", "-ob",
-        "-o", str(output_path),
-    ]
-    if mode == "headless":
-        command.extend(["-hl", "-aff", "-xhr"])
-    command_record = {"command": command, "seed": seed, "mode": mode, "network_scope": "loopback only"}
-    command_path = baseline_dir / "command.json"
-    command_path.write_text(json.dumps(command_record, indent=2), encoding="utf-8")
-    log_path = baseline_dir / "stdout.txt"
-    code, elapsed = run_logged(command, ROOT, log_path, timeout=600)
-    metadata = {
-        "tool": "katana",
-        "mode": mode,
-        "seed": seed,
-        "fixture_fingerprint": fingerprint,
-        "katana_sha256": katana_hash,
-        "exit_code": code,
-        "elapsed_seconds": round(elapsed, 3),
-        "output_rows": len(read_json_lines(output_path)),
-        "frozen": True,
-        "cache_reused": False,
-        "command": command,
-    }
-    metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
-    links_path = out_dir / name / f"katana-{mode}-baseline.json"
-    links_path.parent.mkdir(parents=True, exist_ok=True)
-    links_path.write_text(
-        json.dumps({"baseline_dir": str(baseline_dir), "metadata": str(metadata_path)}, indent=2),
-        encoding="utf-8",
-    )
-    return metadata, read_json_lines(output_path)
+    # A changed fixture or missing cache must never silently rescan Katana.
+    return {
+        "tool": "katana", "mode": mode, "exit_code": -1,
+        "elapsed_seconds": None, "frozen": True, "cache_reused": False,
+        "fixture_fingerprint": fingerprint, "katana_sha256": katana_hash,
+        "error": "Frozen baseline unavailable for this fixture; reference scan was not repeated.",
+    }, []
 
 
 def build_binary(go: str, module_dir: Path, output: Path, log_path: Path) -> float:
@@ -487,9 +454,11 @@ def markdown_report(
             "|---|---:|---:|---:|---:|---:|---|",
         ])
         for result in site["comparison_rows"]:
+            if result["exit_code"] < 0:
+                lines.append(f"| {result['tool']} / {result['mode']} | — | 未测 | 未测 | — | 未测 | 冻结记录不可用，未重扫 |")
+                continue
             missing = result["page_missing"] + result["interface_missing"]
-            if result["mode"] != "static-round-1" and result["mode"] != "static-round-2" and result["mode"] != "static-round-3":
-                missing += result["runtime_missing"]
+            missing += result["runtime_missing"]
             testfill_cell = "—"
             if result["tool"] == "basecrawler":
                 expected_testfill = result.get("expected_testfill_interfaces", {})
@@ -542,7 +511,7 @@ def markdown_report(
         "",
         "## Interpretation",
         "",
-        "Page route success requires an HTTP 2xx/3xx response. Interface discovery and successful HTTP responses are counted separately. Basecrawler's testfill generation/sends are reported independently from ordinary crawl requests. Click-only APIs are a Browcrawler browser-interaction target; their absence from Basecrawler's no-browser results is not counted as a static crawler failure.",
+        "Page route success requires an HTTP 2xx/3xx response. Interface discovery and successful HTTP responses are counted separately. Basecrawler's testfill generation/sends are reported independently from ordinary crawl requests. Browser interaction URLs remain required Basecrawler targets. This legacy table groups by path; use crawler_retained_acceptance.py for full method/URL identities including query parameters and frozen-only reference reuse.",
         "",
     ])
     return "\n".join(lines)

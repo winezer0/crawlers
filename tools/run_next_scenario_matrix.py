@@ -12,6 +12,7 @@ import shutil
 import tempfile
 from urllib.parse import parse_qsl, urlencode, urlsplit
 
+from crawler_evidence_audit import audit_scan
 from run_local_site_regression import (
     ROOT, BASECRAWLER, SITE_CONFIG, build_site, crawl_site, launch_service,
     npm_cli_for, read_json_lines, run_logged, sha256_file, stop_service, wait_for_service,
@@ -29,6 +30,12 @@ SCENARIOS = (
     {"id": "svg-identity", "seed": "/matrix/svg", "targets": ["/api/matrix/svg"], "holdout": True},
 )
 NEGATIVE = "/api/matrix/decoy-not-a-request"
+FIXTURE_BRANCH_CONDITIONS = {
+    "client-effect": "ClientProbe mode falls through lazy/response/svg checks to the CSR fetch",
+    "lazy-import": "ClientProbe mode === lazy; await dynamic import then invoke run",
+    "response-chain": "ClientProbe mode === response; fetch bootstrap then await JSON and fetch data.next",
+    "svg-identity": "ClientProbe mode === svg; SVGElement instance and className.baseVal === probe",
+}
 
 
 def key(url: str, method: str = "GET") -> str:
@@ -123,6 +130,44 @@ def main() -> int:
                 rows = read_json_lines(out / name / "tool-output.jsonl")
                 discoveries = read_json_lines(out / name / "discoveries.jsonl")
                 scored = evaluate(case, rows, discoveries)
+                audit = audit_scan(out / name)
+                known_targets = {}
+                for scenario in SCENARIOS:
+                    for target in scenario["targets"]:
+                        known_targets.setdefault("GET " + origin + target, []).append(scenario["id"])
+                extra = []
+                expected_labels = {"GET " + origin + target for target in case["targets"]}
+                for target in audit["targets"]:
+                    if not urlsplit(target["url"]).path.startswith("/api/matrix/"):
+                        continue
+                    label = target["identity"]
+                    target["fixture_contract"] = {
+                        "expected_for_current_seed": label in expected_labels,
+                        "known_scenarios": known_targets.get(label, []),
+                        "authored_trigger_conditions": {
+                            mode: FIXTURE_BRANCH_CONDITIONS[mode] for mode in known_targets.get(label, [])
+                            if mode in FIXTURE_BRANCH_CONDITIONS},
+
+                        "source": "authored local fixture contract, not runtime reachability proof",
+                    }
+                    if target["attempts"] and label not in expected_labels:
+                        extra.append({
+                            "identity": label, "known_scenarios": known_targets.get(label, []),
+                            "dispatch_bases": target["dispatch_bases"],
+                            "runtime_request_call_observed": target["stages"]["runtime_request_call_observed"],
+                            "parents": sorted({row.get("referer", "") for row in target["attempts"]}),
+                            "classification": "other_fixture_mode" if label in known_targets else "unclassified",
+                        })
+                audit["extra_api_requests"] = extra
+                audit["scenario_id"] = name
+                (out / name / "evidence-audit.json").write_text(json.dumps(audit, indent=2), encoding="utf-8")
+                runtime_labels = {target["identity"] for target in audit["targets"]
+                                  if target["stages"]["runtime_request_call_observed"]}
+                scored["non_success_http_responses"] = audit["non_success_http_responses"]
+                scored["evidence_audit"] = f"{name}/evidence-audit.json"
+                scored["expected_runtime_calls"] = sorted(expected_labels & runtime_labels)
+                scored["expected_without_runtime_call_evidence"] = sorted(expected_labels - runtime_labels)
+                scored["extra_api_attribution"] = extra
                 scored.update({"id": name, "holdout": case.get("holdout", False),
                                "elapsed_seconds": scan["elapsed_seconds"],
                                "response_rows": scan["response_rows"], "discovery_rows": scan["discovery_rows"],

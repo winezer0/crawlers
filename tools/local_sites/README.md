@@ -37,3 +37,20 @@ dynamic import, response continuation or SVG guard executed. Shared-component br
 deliberately expose this distinction. Extra APIs are unclassified for that seed, not
 automatically invalid across the entire site. The fixtures are an application contract,
 not yet a browser-recorded oracle or a new frozen Katana comparison.
+
+The scenario runner also writes an `evidence-audit.json` for each seed. It joins all
+discovery edges with exact method/URL attempts and responses, preserving explicit
+header contexts and the actual dispatch source. A response attributed to AST or JSON
+can coexist with a later runtime call; the audit retains both without asserting
+causal order. The local fixture's branch conditions are contract annotations, not
+proof that the generic parser established reachability.
+
+Existing scan records can be audited offline without rescanning:
+
+```powershell
+python tools/crawler_evidence_audit.py --scan-dir artifacts/crawler-comparison/RUN/CASE --output artifacts/crawler-comparison/AUDIT/CASE.json
+```
+
+Legacy attempts lacking `authored_headers` have unknown header context. New records
+contain explicit per-request inputs, including null when none were supplied; these
+are not a capture of every transport header.

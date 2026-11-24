@@ -134,7 +134,8 @@ def frozen_local(name: str, mode: str, fingerprint: str, expected: dict) -> tupl
             "fixture_matches": chosen[0], "reference_rescanned": False, "metadata": metadata}, rows
 
 
-def browser(binary: Path, seed: str, directory: Path, *, public: bool = False) -> tuple[dict, list]:
+def browser(binary: Path, seed: str, directory: Path, *, public: bool = False,
+            upstream: str | None = None) -> tuple[dict, list]:
     directory.mkdir(parents=True, exist_ok=True)
     config = (BROWCRAWLER / "config.example.yaml").read_text(encoding="utf-8")
     # Keep all run files isolated; use the configured bundled browser explicitly.
@@ -147,11 +148,17 @@ def browser(binary: Path, seed: str, directory: Path, *, public: bool = False) -
                "--no-basecrawler", "--scope-mode", "fqdn", "--depth", "8",
                "--max-pages", "1" if public else "100", "--interactions", "10",
                "--settle-ms", "2000" if public else "600", "--retries", "0",
-               "--backend", "obscura", "--upstream", "none", "--concurrency", "1",
+               "--backend", "obscura", "--concurrency", "1",
                "--out", str(directory / "traffic.jsonl"), "--discovered", str(directory / "discoveries.jsonl"),
                "--report", str(directory / "report.json")]
+    # An absent override must retain the configured transport. Forcing "none"
+    # made public comparisons use a different network path from the control.
+    if upstream is not None:
+        command += ["--upstream", upstream]
     save(directory / "command.json", {"command": command, "browser": str(BROWCRAWLER / "third/obscura/obscura.exe"),
-                                      "basecrawler_bootstrap": False, "public_single_page": public})
+                                      "basecrawler_bootstrap": False, "public_single_page": public,
+                                      "upstream_override": upstream,
+                                      "upstream_source": "config" if upstream is None else "cli"})
     code, elapsed = run_logged(command, BROWCRAWLER, directory / "stdout.txt", timeout=240 if public else 600)
     traffic = read_json_lines(directory / "traffic.jsonl")
     rows = traffic + read_json_lines(directory / "discoveries.jsonl")
@@ -301,6 +308,7 @@ def main() -> int:
     parser.add_argument("--sites", default="local-nuxt,local-react,local-next")
     parser.add_argument("--skip-build", action="store_true")
     parser.add_argument("--with-public", action="store_true", help="also verify one live Next Docs page with Obscura")
+    parser.add_argument("--browser-upstream", help="override browser upstream proxy; omitted uses config; 'none' explicitly selects direct")
     parser.add_argument("--rescore-from", type=Path, help="rescore saved records offline without changing them")
     parser.add_argument("--scenario-summary", type=Path, action="append", default=[], help="include an existing independent scenario result")
     args = parser.parse_args()
@@ -340,7 +348,7 @@ def main() -> int:
         try:
             wait_for_service(service, origin + config["seed_path"], log)
             base_run, base_rows = run_basecrawler(name, origin, base, out, 1, True, 3)
-            browser_run, browser_rows = browser(brow, origin + config["seed_path"], out / name / "browser")
+            browser_run, browser_rows = browser(brow, origin + config["seed_path"], out / name / "browser", upstream=args.browser_upstream)
         finally:
             stop_service(service)
         measurements = {"basecrawler": score(expected, base_rows, base_run["elapsed_seconds"]),
@@ -364,7 +372,7 @@ def main() -> int:
         print(json.dumps({"site": name, "coverage": {k: f"{v['successful']}/{v['expected']}" for k, v in measurements.items()}}), flush=True)
     public_run, public_rows = None, []
     if args.with_public:
-        public_run, public_rows = browser(brow, "https://nextjs.org/docs", out / "public-next-docs", public=True)
+        public_run, public_rows = browser(brow, "https://nextjs.org/docs", out / "public-next-docs", public=True, upstream=args.browser_upstream)
     write_report(out, results, public_run, public_rows, args.scenario_summary)
     print(out)
     return 0

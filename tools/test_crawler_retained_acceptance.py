@@ -5,12 +5,25 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from crawler_retained_acceptance import identity, route, score, frozen_local, contract, audit_sources
+from crawler_retained_acceptance import identity, route, score, frozen_local, contract, audit_sources, browser
 from run_local_site_regression import read_json_lines
 from run_local_crawler_matrix import run_katana_baseline
 
 
 class RetainedAcceptanceTests(unittest.TestCase):
+    def test_browser_transport_is_not_silently_changed(self):
+        for upstream in (None, "socks5://127.0.0.1:10808", "none"):
+            with self.subTest(upstream=upstream), tempfile.TemporaryDirectory() as directory, patch("crawler_retained_acceptance.run_logged", return_value=(0, 1)) as run, patch("crawler_retained_acceptance.read_json_lines", return_value=[]):
+                browser(Path("browcrawler.exe"), "https://example.test", Path(directory), public=True, upstream=upstream)
+                command = run.call_args.args[0]
+                if upstream is None:
+                    self.assertNotIn("--upstream", command)
+                else:
+                    self.assertEqual(command[command.index("--upstream")+1], upstream)
+                evidence = json.loads((Path(directory)/"command.json").read_text(encoding="utf-8"))
+                self.assertEqual(evidence["upstream_override"], upstream)
+                self.assertIn("--no-basecrawler", command)
+
     def test_legacy_matrix_missing_cache_never_rescans_or_mutates_reference(self):
         with tempfile.TemporaryDirectory() as directory, patch("run_local_crawler_matrix.KATANA_BASELINES", Path(directory)), patch("run_local_crawler_matrix.fixture_fingerprint", return_value="hash"), patch("run_local_crawler_matrix.run_logged") as run:
             metadata, rows = run_katana_baseline("local-react", "standard", "http://127.0.0.1:18732", "binary-hash", Path(directory))

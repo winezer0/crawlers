@@ -8,6 +8,24 @@ import crawler_runtime_replay as replay
 
 
 class RuntimeReplayTests(unittest.TestCase):
+    def test_inline_control_preserves_order_and_excludes_inert_or_nonclassic_scripts(self):
+        html = '''<script>globalThis.before=true;</script>
+        <template><script>globalThis.inert=true;</script></template>
+        <noscript><script>globalThis.fallback=true;</script></noscript>
+        <script type="application/json">{"fake":true}</script>
+        <script type="module">globalThis.module=true;</script>
+        <script>globalThis.TURBOPACK=[];TURBOPACK.push({otherChunks:[],runtimeModuleIds:[1]});</script>
+        <script>globalThis.after=true;</script>'''
+        default, _, count = replay.frontend_evidence(html, "https://example.test/", False)
+        full, _, full_count = replay.frontend_evidence(html, "https://example.test/", True)
+        self.assertEqual(count, 1)
+        self.assertEqual(full_count, 3)
+        self.assertNotIn(b"globalThis.before", default)
+        self.assertLess(full.index(b"globalThis.before"), full.index(b"TURBOPACK"))
+        self.assertLess(full.index(b"TURBOPACK"), full.index(b"globalThis.after"))
+        for marker in (b"inert", b"fallback", b"fake", b"module"):
+            self.assertNotIn(b"globalThis." + marker, full)
+
     def test_frozen_audit_never_closes_rsc_variants_or_navigation(self):
         audit = replay.audit_frozen_missing({"missing": ["https://example.test/a?_rsc=old", "https://example.test/b"]}, [
             {"Raw": "https://example.test/a?_rsc=new", "Method": "GET", "Evidence": "executed-request-call", "Headers": {"rsc": "1"}},

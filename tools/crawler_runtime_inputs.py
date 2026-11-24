@@ -1,4 +1,4 @@
-"""Verify offline response inputs and optional, explicitly labelled JS probes."""
+"""Verify complete, snapshot-bound offline HTTP response inputs."""
 import hashlib
 import json
 from pathlib import Path
@@ -47,29 +47,3 @@ def response_inputs(manifest, document, frontend_sha, dataset, scoped_url, max_f
         target.write_bytes(body)
         records.append(dict(item, method=method, url=url, file=str(target.resolve())))
     return records, {"path": str(manifest.resolve()), "sha256": sha(raw), "responses": len(records), "bytes": total}
-
-
-def probe_modules(modules, manifest, dataset):
-    if not manifest:
-        return modules, None
-    raw = Path(manifest).read_bytes()
-    probes = json.loads(raw)
-    result = dict(modules)
-    for url, spec in probes.items():
-        if url not in modules:
-            raise ValueError("Probe source is absent from verified dataset: " + url)
-        body = Path(modules[url]).read_bytes()
-        if sha(body) != spec["sha256"]:
-            raise ValueError("Probe source hash changed")
-        source = body.decode("utf-8")
-        for point in spec["points"]:
-            marker = point["after"]
-            if not marker or source.count(marker) != 1:
-                raise ValueError("Probe marker must occur exactly once")
-            code = 'if(typeof __reportRuntimeProbe==="function")__reportRuntimeProbe(JSON.stringify({label:' + json.dumps(point["label"]) + ',value:(' + point["expression"] + ')}));'
-            source = source.replace(marker, marker + code, 1)
-        target = dataset / "instrumented" / (sha(url.encode()) + ".js")
-        target.parent.mkdir(exist_ok=True)
-        target.write_text(source, encoding="utf-8")
-        result[url] = str(target.resolve())
-    return result, {"path": str(Path(manifest).resolve()), "sha256": sha(raw), "diagnostic_only": True, "modules": len(probes)}

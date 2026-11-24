@@ -20,7 +20,7 @@ from urllib.error import HTTPError
 from urllib.parse import parse_qsl, urljoin, urlsplit, urlunsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-from crawler_runtime_inputs import probe_modules, response_inputs
+from crawler_runtime_inputs import response_inputs
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -102,13 +102,13 @@ class Frontend(HTMLParser):
             self.active = None
 
 
-def frontend_evidence(body, document, include_inline_scripts=True):
+def frontend_evidence(body, document):
     parsed = Frontend(document)
     parsed.feed(body)
     entries = [s for s in parsed.inline if "TURBOPACK" in s and "runtimeModuleIds" in s]
     if not entries:
         raise ValueError("No observed inline Turbopack bootstrap")
-    scripts = parsed.inline if include_inline_scripts else [s for s in parsed.inline if s in entries or ("__next_f" in s and ".push" in s)]
+    scripts = parsed.inline
     evidence = {u: [{"kind": "html-script-src", "source": document}] for u in parsed.sources}
     paths = []
     for script in entries:
@@ -258,8 +258,6 @@ def main():
     parser.add_argument("--with-dom", action="store_true", help="Install the actual saved HTML tree; does not render or trigger links")
     parser.add_argument("--explore-interactions", action=argparse.BooleanOptionalAction, default=True, help="Explore observed DOM clicks as production does; requires --with-dom")
     parser.add_argument("--response-manifest", type=Path, help="Hash-verified complete saved responses bound to this HTML snapshot")
-    parser.add_argument("--probe-manifest", type=Path, help="Optional hash-guarded source probes; output is diagnostic only")
-    parser.add_argument("--include-inline-scripts", action=argparse.BooleanOptionalAction, default=True, help="Include observed classic inline scripts as production does; disable only for diagnostic controls")
     parser.add_argument("--media-environment", type=Path, help="JSON declaring virtual media inputs, not measured browser/screen data")
     parser.add_argument("--frozen-effective", type=Path, help="Saved effective.json with missing GET targets; audit only, never rewrite the reference")
     parser.add_argument("--reference-entry", help="Frozen benchmark entry URL; labels different-page diagnostics explicitly")
@@ -291,7 +289,7 @@ def main():
     report_directory.mkdir(parents=True, exist_ok=True)
     (args.dataset / "sources").mkdir(exist_ok=True)
     frontend = args.html.read_bytes()
-    bootstrap, evidence, scripts = frontend_evidence(frontend.decode("utf-8"), args.document_url, args.include_inline_scripts)
+    bootstrap, evidence, scripts = frontend_evidence(frontend.decode("utf-8"), args.document_url)
     parsed = Frontend(args.document_url)
     parsed.feed(frontend.decode("utf-8"))
     style_evidence = {u: [{"kind": "html-stylesheet-link", "source": args.document_url}] for u in parsed.stylesheets}
@@ -335,7 +333,6 @@ def main():
             network += collect(args, state, style_evidence, "css")
             save(state_file, state)
             modules = verified_modules(args.dataset, state)
-            modules, probe_provenance = probe_modules(modules, args.probe_manifest, args.dataset)
             save(args.dataset / "modules.json", modules)
             stylesheets = verified_modules(args.dataset, {"modules": state.get("stylesheets", {})})
             save(args.dataset / "stylesheets.json", stylesheets)
@@ -380,7 +377,7 @@ def main():
             evidence = pending
     summary = {"status": rounds[-1]["status"], "coverage_accepted": False, "rounds": len(rounds), "modules": len([r for r in state["modules"].values() if r.get("file")]), "network_requests": network, "downloads_enabled": args.download, "unavailable": classify_unavailable(state), "runtime_source_sha256": runtime_hash, "runtime_executable_sha256": executable_hash, "source_changed_during_replay": runtime_hash != runtime_fingerprint(), "stop_reason": stop_reason, "environment_gaps": rounds[-1].get("environment_gaps", []), "dependency_limits": {"modules": 512, "bytes": args.max_total_bytes}, "wall_seconds": round(time.monotonic() - started, 6), "execution_seconds": sum(r["elapsed_seconds"] for r in rounds), "last_error": rounds[-1]["error"], "captured_requests": rounds[-1].get("requests") or [], "policy": "VM does not send requests. Initialization or capture is not full crawler acceptance."}
     summary.update(with_dom=args.with_dom, runtime_state=rounds[-1].get("runtime_state", {}), runtime_diagnostics=rounds[-1].get("runtime_diagnostics", []), pending_tasks=rounds[-1].get("pending_tasks", []))
-    summary.update(explore_interactions=args.explore_interactions and args.with_dom, include_inline_scripts=args.include_inline_scripts, response_inputs=response_provenance, source_probes=probe_provenance, response_dependencies=rounds[-1].get("response_dependencies", []))
+    summary.update(explore_interactions=args.explore_interactions and args.with_dom, include_inline_scripts=True, response_inputs=response_provenance, response_dependencies=rounds[-1].get("response_dependencies", []))
     summary.update(execution_stop_reason=rounds[-1].get("execution_stop_reason"), captured_http_calls=rounds[-1].get("captured_http_calls", 0), captured_navigation_calls=rounds[-1].get("captured_navigation_calls", 0))
     save(args.dataset / "summary.json", summary)
     if args.frozen_effective:

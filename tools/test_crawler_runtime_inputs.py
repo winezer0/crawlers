@@ -9,7 +9,7 @@ from pathlib import Path
 from threading import Thread
 from urllib.request import Request, urlopen
 
-from crawler_runtime_inputs import probe_modules, response_inputs, sha
+from crawler_runtime_inputs import response_inputs, sha
 from crawler_runtime_replay import ROOT, scoped_url
 
 
@@ -47,25 +47,6 @@ class RuntimeInputTests(unittest.TestCase):
                     self.assertEqual(Path(records[0]["file"]).read_bytes(), (root / "body").read_bytes())
                     self.assertEqual(proof["responses"], 1)
                     self.assertEqual(records[0]["request_headers"], {"X-Proof": "actual"})
-
-    def test_probe_requires_exact_hash_unique_marker_and_preserves_original(self):
-        with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
-            source = root / "source.js"
-            original = b"function run(a){return a.value}"
-            source.write_bytes(original)
-            manifest = root / "probe.json"
-            spec = {"https://example.test/source.js": {"sha256": sha(original), "points": [
-                {"after": "function run(a){", "label": "component", "expression": "a.value"}]}}
-            manifest.write_text(json.dumps(spec))
-            files, proof = probe_modules({next(iter(spec)): str(source)}, manifest, root)
-            self.assertIn("__reportRuntimeProbe", Path(next(iter(files.values()))).read_text())
-            self.assertEqual(source.read_bytes(), original)
-            self.assertTrue(proof["diagnostic_only"])
-            spec[next(iter(spec))]["points"][0]["after"] = "missing"
-            manifest.write_text(json.dumps(spec))
-            with self.assertRaisesRegex(ValueError, "exactly once"):
-                probe_modules({next(iter(spec)): str(source)}, manifest, root)
 
     def test_actual_fixture_click_and_response_chain(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -105,7 +86,7 @@ class RuntimeInputTests(unittest.TestCase):
             html = root / "page.html"
             html.write_text('<button id="run">Run</button>')
             source = root / "entry.js"
-            source.write_text('export const routes=[];__reportRuntimeProbe(JSON.stringify({label:"entry",value:true}));document.getElementById("run").onclick=()=>fetch("/input",{headers:{"x-proof":"actual"}}).then(r=>r.json()).then(data=>fetch("/"+data.parts.join("-")));')
+            source.write_text('export const routes=[];document.getElementById("run").onclick=()=>fetch("/input",{headers:{"x-proof":"actual"}}).then(r=>r.json()).then(data=>fetch("/"+data.parts.join("-")));')
             executable = root / "runtime.exe"
             subprocess.run(["go", "test", "-c", "-o", str(executable), "./internal/routeexec"], cwd=ROOT / "basecrawler", check=True, capture_output=True, timeout=120)
             for scenario, expected in (("disabled", 0), ("missing", 1), ("wrong-header", 1), ("actual", 2)):
@@ -121,7 +102,6 @@ class RuntimeInputTests(unittest.TestCase):
                     result = json.loads(report.read_text())
                     self.assertEqual(result["captured_http_calls"], expected)
                     self.assertEqual(result["network_requests"], 0)
-                    self.assertEqual([d["kind"] for d in result["runtime_diagnostics"]].count("runtime_probe"), 1)
                     if scenario == "actual":
                         self.assertEqual(result["requests"][-1]["Raw"], base + "/from-response")
                     if scenario in ("missing", "wrong-header"):

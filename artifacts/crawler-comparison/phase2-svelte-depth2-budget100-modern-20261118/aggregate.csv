@@ -1,2 +1,0 @@
-﻿site_id,tool,mode,rounds,known_exit_rounds,recovered_exit_unknown,failed_or_interrupted,mean_unique_urls,mean_in_scope_urls,mean_out_scope_urls,mean_result_urls,mean_discovery_urls,mean_unique_only,round_stability_jaccard,mean_seconds
-framework-sveltekit,basecrawler,static,3,3,0,0,706.0,706.0,0.0,91.0,862.0,,1.0,107.87

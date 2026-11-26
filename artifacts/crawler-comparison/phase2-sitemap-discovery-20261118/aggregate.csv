@@ -1,6 +1,0 @@
-﻿site_id,tool,mode,rounds,known_exit_rounds,recovered_exit_unknown,failed_or_interrupted,mean_unique_urls,mean_in_scope_urls,mean_out_scope_urls,mean_result_urls,mean_discovery_urls,mean_unique_only,round_stability_jaccard,mean_seconds
-framework-angular,basecrawler,static,3,3,0,0,1658.0,1658.0,0.0,19.0,1658.0,,1.0,23.2
-framework-nextjs,basecrawler,static,3,3,0,0,1195.0,1195.0,0.0,17.0,1195.0,,1.0,22.77
-framework-react,basecrawler,static,3,3,0,0,106.0,106.0,0.0,19.0,106.0,,1.0,22.87
-framework-sveltekit,basecrawler,static,3,3,0,0,399.0,399.0,0.0,20.0,404.0,,1.0,26.6
-framework-vue,basecrawler,static,3,3,0,0,196.0,196.0,0.0,18.0,197.0,,1.0,23.6

@@ -1,7 +1,0 @@
-{
-  "source": "https://huggingface.co/datasets/happyhackingspace/dit/resolve/main/model.json",
-  "bytes": 97055990,
-  "sha256": "eba238b3093ff7aa4772ce17536bc313cb955428a6aa87dae41695a2dede6e59",
-  "cache": "~/.dit/model.json",
-  "purpose": "Katana knowledge-base initialization; no live credential validation"
-}

@@ -1,2 +1,0 @@
-﻿site_id,sitemap_urls,llms_urls,seed_links,navigation_graph_urls,navigation_pages_fetched,navigation_page_cap_reached,source_unique_urls,verified_gold_urls,verified_pages,verified_api_documentation_pages,verified_api_endpoints,candidate_urls,route_candidates_ex_assets,http_accessible_route_candidates,true_positives,gold_precision,gold_recall
-framework-sveltekit,0,193,90,627,91,False,646,532,532,0,0,706,518,480,444,0.8571,0.8346

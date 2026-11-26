@@ -54,6 +54,18 @@ def evaluate(expected, rows, events, elapsed):
     return result
 
 
+def reuse_katana(previous, variant, tool):
+    """Use the recorded reference without depending on the new host's Chrome."""
+    metadata = previous["variants"][variant][tool]["run"]
+    path = Path(metadata["output"])
+    if sha256_file(path) != metadata["output_sha256"]:
+        raise RuntimeError(f"Recorded Katana output changed: {path}")
+    oracle = path.parent / "oracle.json"
+    if not oracle.is_file():
+        raise RuntimeError(f"Recorded Katana oracle missing: {oracle}")
+    return {**metadata, "cache_reused": True}, read_json_lines(path)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out-dir", type=Path, required=True)
@@ -110,8 +122,11 @@ def main():
                     else:
                         meta, rows = browser(args.brow_binary.resolve(), origin + "/" + variant, out / name / tool)
                 else:
-                    meta, rows = freeze(name, tool.removeprefix("katana-"), origin, deployment,
-                                        Path("C:/Program Files/Google/Chrome/Application/chrome.exe"))
+                    if args.reuse_browser_dir:
+                        meta, rows = reuse_katana(previous, variant, tool)
+                    else:
+                        meta, rows = freeze(name, tool.removeprefix("katana-"), origin, deployment,
+                                            Path("C:/Program Files/Google/Chrome/Application/chrome.exe"))
                 with server.lock:
                     events = list(server.events)
                 if recorded_events is not None:

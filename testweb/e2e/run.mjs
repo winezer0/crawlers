@@ -15,7 +15,7 @@ const results = []
 
 function start(label, command, args, cwd, env = {}) {
   const log = createWriteStream(resolve(output, `${label}.log`), { flags: 'a' })
-  const child = spawn(command, args, { cwd, env: { ...process.env, ...env }, shell: process.platform === 'win32', windowsHide: true })
+  const child = spawn(command, args, { cwd, env: { ...process.env, ...env }, windowsHide: true })
   child.stdout.pipe(log); child.stderr.pipe(log)
   children.push({ child, log, label })
   return child
@@ -105,8 +105,9 @@ try {
     ['angular', 'start', ['--port', '4300']], ['angular', 'start', ['--port', '4301']],
     ['nuxt', 'dev', ['--port', '3000']], ['nextjs', 'dev', ['--port', '3001']], ['sveltekit', 'dev', ['--port', '5175']],
   ]
+  if (!process.env.npm_execpath) throw new Error('Run E2E through `npm run e2e` so npm_execpath is available')
   for (const [app, script, args] of apps) {
-    start(app + '-' + args.at(-1), 'npm', ['run', script, '--workspace', `testweb-${app}`, '--', ...args], root)
+    start(app + '-' + args.at(-1), process.execPath, [process.env.npm_execpath, 'run', script, '--workspace', `testweb-${app}`, '--', ...args], root)
   }
   for (const site of manifest.sites) await waitFor(site.url, site.id)
   const browser = await chromium.launch({ headless: true, executablePath: process.env.TESTWEB_BROWSER || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe' })

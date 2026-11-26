@@ -1,0 +1,28 @@
+{
+  "name": "testweb-local-sites",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/vue",
+    "apps/react",
+    "apps/angular",
+    "apps/nuxt",
+    "apps/nextjs",
+    "apps/sveltekit"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace testweb-vue && npm run build --workspace testweb-react && npm run build --workspace testweb-angular && npm run build --workspace testweb-nuxt && npm run build --workspace testweb-nextjs && npm run build --workspace testweb-sveltekit",
+    "e2e": "node e2e/run.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.50.1"
+  },
+  "allowScripts": {
+    "esbuild@0.21.5": true,
+    "esbuild@0.24.2": true,
+    "esbuild@0.24.0": true,
+    "esbuild@0.28.2": true,
+    "@parcel/watcher@2.6.0": true,
+    "@sveltejs/kit@2.15.2": true
+  }
+}

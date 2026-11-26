@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "listen": "127.0.0.1:8090",
+  "sites": [
+    {"id":"testasp","url":"http://127.0.0.1:8090/sites/testasp/","profile":"traditional-asp-like","status":"implemented"},
+    {"id":"testphp","url":"http://127.0.0.1:8090/sites/testphp/","profile":"traditional-php-like","status":"implemented"},
+    {"id":"testaspnet","url":"http://127.0.0.1:8090/sites/testaspnet/","profile":"traditional-aspnet-like","status":"implemented"},
+    {"id":"testhtml5","url":"http://127.0.0.1:8090/sites/testhtml5/","profile":"html5-native-js","status":"implemented"},
+    {"id":"juice-shop","url":"http://127.0.0.1:4301/","profile":"angular-spa-api","status":"implemented"},
+    {"id":"framework-vue","url":"http://127.0.0.1:5173/?site=framework-vue","profile":"vue-router","status":"implemented"},
+    {"id":"framework-react","url":"http://127.0.0.1:5174/?site=framework-react","profile":"react-router","status":"implemented"},
+    {"id":"app-react-todomvc","url":"http://127.0.0.1:5174/?site=app-react-todomvc","profile":"react-todo","status":"implemented"},
+    {"id":"app-vue-todomvc","url":"http://127.0.0.1:5173/?site=app-vue-todomvc","profile":"vue-todo","status":"implemented"},
+    {"id":"framework-angular","url":"http://127.0.0.1:4300/","profile":"angular-router","status":"implemented"},
+    {"id":"framework-nuxt","url":"http://127.0.0.1:3000/","profile":"nuxt-ssr","status":"implemented"},
+    {"id":"framework-nextjs","url":"http://127.0.0.1:3001/","profile":"next-app-router","status":"implemented"},
+    {"id":"framework-sveltekit","url":"http://127.0.0.1:5175/","profile":"sveltekit-ssr","status":"implemented"}
+  ]
+}

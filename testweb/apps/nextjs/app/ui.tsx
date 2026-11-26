@@ -1,0 +1,3 @@
+'use client'
+import { useState } from 'react'
+export function Actions() { const [result,setResult]=useState(''); const site='framework-nextjs'; async function load(){setResult(await (await fetch(`http://127.0.0.1:8090/api/${site}/catalog`)).text())} async function search(e:React.FormEvent<HTMLFormElement>){e.preventDefault();setResult(await (await fetch(`http://127.0.0.1:8090/api/${site}/search`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:new FormData(e.currentTarget).get('query')})})).text())} return <section><button onClick={load}>Load catalog</button><form onSubmit={search}><label>Search <input name="query" defaultValue="blue"/></label><button>Search API</button></form><pre data-testid="api-result">{result}</pre></section> }

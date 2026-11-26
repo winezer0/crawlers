@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "identity": "HTTP method + exact path + exact query string",
+  "sites": {
+    "testasp": {"routes": [
+      {"method":"GET","path":"/","kind":"html-link"},
+      {"method":"GET","path":"/pages/","kind":"html-link"},
+      {"method":"GET","path":"/pages/detail.asp?id=item-01","kind":"parameter-route"},
+      {"method":"GET","path":"/search.asp?q=blue&page=1","kind":"form-get"},
+      {"method":"POST","path":"/submit.asp","kind":"form-post"},
+      {"method":"GET","path":"/assets/site.css","kind":"static-asset"},
+      {"method":"GET","path":"/robots.txt","kind":"robots"},
+      {"method":"GET","path":"/sitemap.xml","kind":"sitemap"}
+    ]},
+    "testphp": {"routes": [
+      {"method":"GET","path":"/","kind":"html-link"},
+      {"method":"GET","path":"/pages/","kind":"html-link"},
+      {"method":"GET","path":"/pages/detail.php?id=item-01","kind":"parameter-route"},
+      {"method":"GET","path":"/search.php?q=blue&page=1","kind":"form-get"},
+      {"method":"POST","path":"/submit.php","kind":"form-post"},
+      {"method":"GET","path":"/assets/site.css","kind":"static-asset"},
+      {"method":"GET","path":"/robots.txt","kind":"robots"},
+      {"method":"GET","path":"/sitemap.xml","kind":"sitemap"}
+    ]},
+    "testaspnet": {"routes": [
+      {"method":"GET","path":"/","kind":"html-link"},
+      {"method":"GET","path":"/Pages/","kind":"html-link"},
+      {"method":"GET","path":"/Pages/Detail.aspx?id=item-01","kind":"parameter-route"},
+      {"method":"GET","path":"/Search.aspx?q=blue&page=1","kind":"form-get"},
+      {"method":"POST","path":"/Submit.aspx","kind":"form-post"},
+      {"method":"GET","path":"/assets/site.css","kind":"static-asset"},
+      {"method":"GET","path":"/robots.txt","kind":"robots"},
+      {"method":"GET","path":"/sitemap.xml","kind":"sitemap"}
+    ]},
+    "testhtml5": {"routes": [
+      {"method":"GET","path":"/","kind":"html-link"},
+      {"method":"GET","path":"/pages/","kind":"html-link"},
+      {"method":"GET","path":"/pages/detail.html?id=item-01","kind":"parameter-route"},
+      {"method":"GET","path":"/search.html?q=blue&page=1","kind":"form-get"},
+      {"method":"POST","path":"/submit","kind":"form-post"},
+      {"method":"GET","path":"/assets/site.css","kind":"static-asset"},
+      {"method":"GET","path":"/assets/site.js","kind":"script"},
+      {"method":"GET","path":"/robots.txt","kind":"robots"},
+      {"method":"GET","path":"/sitemap.xml","kind":"sitemap"}
+    ]}
+  }
+}

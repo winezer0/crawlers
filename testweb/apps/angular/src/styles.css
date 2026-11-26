@@ -1,0 +1,1 @@
+body{margin:0;background:#f7f1f1;color:#222;font:16px system-ui,sans-serif}header,main{max-width:900px;margin:auto;padding:1.5rem}header{display:flex;justify-content:space-between;background:#f7dddd}main{background:white;margin-top:2rem;padding:2rem;border-radius:12px}a{margin-right:1rem}button,input{padding:.55rem;margin:.4rem}pre{white-space:pre-wrap;overflow-wrap:anywhere}

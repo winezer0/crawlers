@@ -1,0 +1,13 @@
+node_modules/
+apps/*/node_modules/
+apps/angular/.angular/
+apps/angular/dist/
+apps/nuxt/.nuxt/
+apps/nuxt/.output/
+apps/nextjs/.next/
+apps/nextjs/out/
+apps/sveltekit/.svelte-kit/
+apps/sveltekit/build/
+apps/vue/dist/
+apps/react/dist/
+runs/

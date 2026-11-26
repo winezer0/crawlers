@@ -1,0 +1,1 @@
+export default async function Item({ params }: { params: Promise<{ id: string }> }) { const { id } = await params; const item = await fetch(`http://127.0.0.1:8090/api/framework-nextjs/items/${id}`, { cache: 'no-store' }).then(r => r.json()); return <main><h1>Next.js item {id}</h1><pre>{JSON.stringify(item)}</pre><a href="/">Home</a></main> }

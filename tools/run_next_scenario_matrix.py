@@ -164,6 +164,7 @@ def main() -> int:
     parser.add_argument("--compare-summary", type=Path, help="audit each extra from a previous immutable matrix summary")
     parser.add_argument("--suite", choices=("matrix", "context"), default="matrix")
     parser.add_argument("--skip-build", action="store_true", help="reuse an already built Next fixture")
+    parser.add_argument("--port", type=int, help="serve the same build on an isolated loopback port")
     args = parser.parse_args()
     previous = json.loads(args.compare_summary.read_text(encoding="utf-8")) if args.compare_summary else None
     scenarios = CONTEXT_SCENARIOS if args.suite == "context" else SCENARIOS
@@ -189,6 +190,10 @@ def main() -> int:
     if not node or not go:
         raise RuntimeError("Node and Go are required")
     config = dict(SITE_CONFIG["local-next"])
+    if args.port is not None:
+        if not 1 <= args.port <= 65535:
+            parser.error("--port must be between 1 and 65535")
+        config["port"] = args.port
     build = {} if args.skip_build else build_site("local-next", config, node, npm_cli_for(node), out, True)
     service = None
     results = []
